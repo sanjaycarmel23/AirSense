@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="IoT-based Air Quality Monitoring and Control System — real-time sensor dashboard with ML-powered AQI prediction." />
+  <title>AQaaS — Air Quality Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════ HEADER ═══════════════════════ -->
+  <header id="app-header">
+    <div class="header-left">
+      <div class="logo-mark" id="logo-mark">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="12" stroke="url(#logoGrad)" stroke-width="2.5" />
+          <path d="M9 18 C9 12, 14 8, 14 8 C14 8, 19 12, 19 18" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <circle cx="14" cy="14" r="3" fill="url(#logoGrad)" />
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="28" y2="28">
+              <stop offset="0%" stop-color="#6ee7b7"/>
+              <stop offset="100%" stop-color="#3b82f6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <h1>AQaaS</h1>
+        <p class="subtitle">Air Quality as a Service</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="connection-badge" id="connection-badge">
+        <span class="pulse-dot"></span>
+        <span>Live</span>
+      </div>
+      <div class="timestamp" id="header-timestamp"></div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════ MAIN ═══════════════════════ -->
+  <main id="dashboard">
+
+    <!-- ────── AQI Hero ────── -->
+    <section class="aqi-hero" id="aqi-hero">
+      <div class="aqi-ring-wrapper">
+        <svg class="aqi-ring" viewBox="0 0 160 160">
+          <circle class="aqi-ring-bg" cx="80" cy="80" r="70" />
+          <circle class="aqi-ring-fill" id="aqi-ring-fill" cx="80" cy="80" r="70" />
+        </svg>
+        <div class="aqi-ring-label">
+          <span class="aqi-category" id="aqi-category">Good</span>
+          <span class="aqi-sub">AQI Prediction</span>
+        </div>
+      </div>
+      <div class="aqi-details">
+        <h2>Air Quality Index</h2>
+        <p class="aqi-desc" id="aqi-desc">Air quality is satisfactory and poses little or no risk.</p>
+        <div class="aqi-bar">
+          <div class="aqi-bar-segment good">Good</div>
+          <div class="aqi-bar-segment moderate">Moderate</div>
+          <div class="aqi-bar-segment poor">Poor</div>
+          <div class="aqi-bar-indicator" id="aqi-bar-indicator"></div>
+        </div>
+        <div class="model-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Random Forest Classifier
+        </div>
+      </div>
+    </section>
+
+    <!-- ────── Sensor Cards ────── -->
+    <section class="sensor-grid" id="sensor-grid">
+
+      <!-- MQ135 Gas -->
+      <article class="sensor-card" id="card-gas">
+        <div class="sensor-icon gas">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 2s4 0 4 4c0 3-2 4-2 8h-4c0-4-2-5-2-8 0-4 4-4 4-4z"/>
+            <path d="M6 14h4"/><line x1="8" y1="18" x2="8" y2="22"/>
+          </svg>
+        </div>
+        <div class="sensor-info">
+          <span class="sensor-label">Gas Index</span>
+          <span class="sensor-source">MQ135 Sensor</span>
+        </div>
+        <div class="sensor-value" id="val-gas">--</div>
+        <div class="sensor-unit">ppm (approx)</div>
+        <div class="sensor-sparkline" id="spark-gas"></div>
+      </article>
+
+      <!-- DSM501A PM2.5 -->
+      <article class="sensor-card" id="card-pm">
+        <div class="sensor-icon pm">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><circle cx="5" cy="8" r="1.5"/><circle cx="19" cy="16" r="1.5"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="6" r="2"/>
+          </svg>
+        </div>
+        <div class="sensor-info">
+          <span class="sensor-label">PM2.5</span>
+          <span class="sensor-source">DSM501A Sensor</span>
+        </div>
+        <div class="sensor-value" id="val-pm">--</div>
+        <div class="sensor-unit">µg/m³</div>
+        <div class="sensor-sparkline" id="spark-pm"></div>
+      </article>
+
+      <!-- Temperature -->
+      <article class="sensor-card" id="card-temp">
+        <div class="sensor-icon temp">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 14.76V3.5a2.5 2.5 0 1 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+          </svg>
+        </div>
+        <div class="sensor-info">
+          <span class="sensor-label">Temperature</span>
+          <span class="sensor-source">DHT22 Sensor</span>
+        </div>
+        <div class="sensor-value" id="val-temp">--</div>
+        <div class="sensor-unit">°C</div>
+        <div class="sensor-sparkline" id="spark-temp"></div>
+      </article>
+
+      <!-- Humidity -->
+      <article class="sensor-card" id="card-hum">
+        <div class="sensor-icon hum">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+          </svg>
+        </div>
+        <div class="sensor-info">
+          <span class="sensor-label">Humidity</span>
+          <span class="sensor-source">DHT22 Sensor</span>
+        </div>
+        <div class="sensor-value" id="val-hum">--</div>
+        <div class="sensor-unit">%RH</div>
+        <div class="sensor-sparkline" id="spark-hum"></div>
+      </article>
+
+    </section>
+
+    <!-- ────── Charts ────── -->
+    <section class="charts-section" id="charts-section">
+      <div class="chart-card wide" id="chart-history">
+        <div class="chart-header">
+          <h3>Sensor Readings — Last 60 s</h3>
+          <div class="chart-legend">
+            <span class="legend-dot gas-legend"></span> Gas
+            <span class="legend-dot temp-legend"></span> Temp
+            <span class="legend-dot hum-legend"></span> Humidity
+          </div>
+        </div>
+        <canvas id="canvas-history" height="220"></canvas>
+      </div>
+      <div class="chart-card" id="chart-distribution">
+        <div class="chart-header">
+          <h3>AQI Distribution</h3>
+        </div>
+        <div class="donut-wrapper">
+          <canvas id="canvas-donut" width="180" height="180"></canvas>
+          <div class="donut-center" id="donut-center">0<br><small>readings</small></div>
+        </div>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </section>
+
+    <!-- ────── Model Info ────── -->
+    <section class="model-section" id="model-section">
+      <div class="model-card">
+        <h3>ML Model Details</h3>
+        <table class="model-table">
+          <tbody>
+            <tr><td>Algorithm</td><td>Random Forest</td></tr>
+            <tr><td>Inputs</td><td>Gas Index, Temperature, Humidity</td></tr>
+            <tr><td>Output</td><td>AQI Category (Good / Moderate / Poor)</td></tr>
+            <tr><td>Status</td><td><span class="status-chip active">Active</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="model-card">
+        <h3>Current Model Inputs</h3>
+        <div class="model-inputs-grid" id="model-inputs-grid">
+          <div class="mi-item">
+            <span class="mi-label">Gas Index</span>
+            <span class="mi-value" id="mi-gas">--</span>
+          </div>
+          <div class="mi-item">
+            <span class="mi-label">Temperature</span>
+            <span class="mi-value" id="mi-temp">--</span>
+          </div>
+          <div class="mi-item">
+            <span class="mi-label">Humidity</span>
+            <span class="mi-value" id="mi-hum">--</span>
+          </div>
+        </div>
+      </div>
+      <div class="model-card alerts-card">
+        <h3>Alerts</h3>
+        <ul class="alerts-list" id="alerts-list">
+          <li class="alert-item info">System initialized — awaiting sensor data.</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+  <footer id="app-footer">
+    <span>AQaaS &copy; 2026 — IoT Air Quality Monitoring</span>
+    <span class="footer-detail">Sensors: MQ135 · DSM501A · DHT22 &nbsp;|&nbsp; ML: Random Forest</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
