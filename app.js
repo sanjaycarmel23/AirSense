@@ -1,485 +1,342 @@
 /* ═══════════════════════════════════════════════════════════
-   AQaaS — Dashboard Application Logic
+   Air Sense — Dashboard Logic (Light Theme + ML Backend)
    ═══════════════════════════════════════════════════════════ */
-
 (() => {
   'use strict';
 
-  /* ── Constants ───────────────────────────────────────────── */
-  const TICK_MS          = 2000;   // data refresh interval
-  const HISTORY_LENGTH   = 30;     // data points on line chart
-  const SPARKLINE_LENGTH = 12;     // data points per sparkline
+  const TICK_MS = 3000, HISTORY_LEN = 15, API_BASE = 'http://localhost:5000/api';
+  const COLORS = { gas:'#3b82f6', temp:'#f97316', hum:'#06b6d4', good:'#10b981', moderate:'#eab308', poor:'#ef4444' };
 
-  const COLORS = {
-    gas:  '#f87171',
-    pm:   '#fbbf24',
-    temp: '#60a5fa',
-    hum:  '#22d3ee',
-    good:     '#34d399',
-    moderate: '#fbbf24',
-    poor:     '#f87171',
-  };
-
-  /* ── State ──────────────────────────────────────────────── */
   const state = {
-    gas:  [], pm: [], temp: [], hum: [],
-    history: { gas: [], temp: [], hum: [] },
-    distribution: { Good: 0, Moderate: 0, Poor: 0 },
-    totalReadings: 0,
-    lastCategory: 'Good',
+    history: { gas:[], temp:[], hum:[], timestamps:[] },
+    distribution: { Good:0, Moderate:0, Poor:0 },
+    totals: { gas:0, temp:0, hum:0 },
+    totalReadings:0, lastCategory:'Good', backendConnected:false, pending:false, aqiScore:0,
+    lastVals: { gas:[], temp:[], hum:[] }
   };
 
-  /* ── DOM refs ───────────────────────────────────────────── */
-  const $ = (id) => document.getElementById(id);
-
+  const $ = id => document.getElementById(id);
   const dom = {
-    valGas:      $('val-gas'),
-    valPm:       $('val-pm'),
-    valTemp:     $('val-temp'),
-    valHum:      $('val-hum'),
-    sparkGas:    $('spark-gas'),
-    sparkPm:     $('spark-pm'),
-    sparkTemp:   $('spark-temp'),
-    sparkHum:    $('spark-hum'),
-    aqiCategory: $('aqi-category'),
-    aqiDesc:     $('aqi-desc'),
-    aqiRingFill: $('aqi-ring-fill'),
-    aqiIndicator:$('aqi-bar-indicator'),
-    miGas:       $('mi-gas'),
-    miTemp:      $('mi-temp'),
-    miHum:       $('mi-hum'),
-    timestamp:   $('header-timestamp'),
-    alertsList:  $('alerts-list'),
-    donutCenter: $('donut-center'),
-    donutLegend: $('donut-legend'),
-    canvasHistory: $('canvas-history'),
-    canvasDonut:   $('canvas-donut'),
+    valGas:$('val-gas'), valTemp:$('val-temp'), valHum:$('val-hum'), valAqi:$('val-aqi'),
+    aqiCategory:$('aqi-category'), aqiDesc:$('aqi-desc'), aqiScoreDisplay:$('aqi-score-display'),
+    aqiBadgeLabel:$('aqi-badge-label'), aqiBadgeScore:$('aqi-badge-score'),
+    aqiBanner:$('aqi-banner'), aqiBannerIcon:$('aqi-banner-icon'), aqiBarIndicator:$('aqi-bar-indicator'),
+    timestamp:$('header-timestamp'), connectionBadge:$('connection-badge'),
+    canvasHistory:$('canvas-history'), canvasDonut:$('canvas-donut'), canvasAvg:$('canvas-averages'),
+    donutLegend:$('donut-legend'),
+    avgGas:$('avg-gas'), avgTemp:$('avg-temp'), avgHum:$('avg-hum'), dataPoints:$('data-points'),
+    insightsList:$('insights-list'), alertsList:$('alerts-list'),
+    refreshBtn:$('refresh-btn'), aqiBadge:$('aqi-badge')
   };
 
-  /* ── Sensor Simulation ──────────────────────────────────── */
-  function randomInRange(min, max) {
-    return min + Math.random() * (max - min);
+  /* ── API ─────────────────────────────────────────────── */
+  async function fetchPrediction(gas, temp, hum) {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 5000);
+    try {
+      const r = await fetch(`${API_BASE}/predict`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({gas_index:gas, temperature:temp, humidity:hum}), signal:c.signal
+      });
+      clearTimeout(t);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch(e) { clearTimeout(t); throw e; }
   }
 
-  function generateSensorData() {
-    // Simulate realistic-ish values with occasional spikes
-    const spike = Math.random() < 0.08;
-    return {
-      gas:  Math.round(randomInRange(spike ? 350 : 80, spike ? 600 : 280)),
-      pm:   Math.round(randomInRange(spike ? 80 : 10, spike ? 180 : 70) * 10) / 10,
-      temp: Math.round(randomInRange(22, 38) * 10) / 10,
-      hum:  Math.round(randomInRange(30, 75) * 10) / 10,
-    };
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${API_BASE}/health`, {signal:AbortSignal.timeout(3000)});
+      if (r.ok) { const d = await r.json(); setConn(d.status==='ok'&&d.model_loaded); return; }
+    } catch {}
+    setConn(false);
   }
 
-  /* ── ML Prediction (simplified Random Forest heuristic) ── */
-  function predictAQI(gas, temp, hum) {
-    // Simulates a Random Forest prediction based on sensor thresholds
-    let score = 0;
-
-    // Gas contribution (heaviest weight)
-    if (gas > 400) score += 3;
-    else if (gas > 250) score += 2;
-    else if (gas > 150) score += 1;
-
-    // Temperature contribution
-    if (temp > 35 || temp < 18) score += 1;
-    if (temp > 40) score += 1;
-
-    // Humidity contribution
-    if (hum > 70 || hum < 25) score += 1;
-
-    if (score >= 4) return 'Poor';
-    if (score >= 2) return 'Moderate';
-    return 'Good';
+  function setConn(ok) {
+    const was = state.backendConnected; state.backendConnected = ok;
+    if (dom.connectionBadge) {
+      const dot = dom.connectionBadge.querySelector('.pulse-dot');
+      const lbl = dom.connectionBadge.querySelector('span:last-child');
+      if (ok) { dom.connectionBadge.style.borderColor='var(--green)'; dom.connectionBadge.style.color='var(--green-dark)'; dom.connectionBadge.style.background='var(--green-light)'; if(dot)dot.style.background='var(--green)'; if(lbl)lbl.textContent='Live'; }
+      else { dom.connectionBadge.style.borderColor='var(--orange)'; dom.connectionBadge.style.color='var(--orange)'; dom.connectionBadge.style.background='var(--orange-light)'; if(dot)dot.style.background='var(--orange)'; if(lbl)lbl.textContent='Offline'; }
+    }
+    if (ok && !was) addAlert('ML backend connected — predictions active', 'success');
+    else if (!ok && was) addAlert('ML backend disconnected — using fallback', 'warning');
   }
 
-  const AQI_META = {
-    Good: {
-      desc: 'Air quality is satisfactory and poses little or no risk.',
-      gradient: 'var(--grad-good)',
-      color: COLORS.good,
-      ringPct: 0.33,
-      barPos: '16.6%',
-    },
-    Moderate: {
-      desc: 'Air quality is acceptable; some pollutants may pose a moderate concern for sensitive groups.',
-      gradient: 'var(--grad-moderate)',
-      color: COLORS.moderate,
-      ringPct: 0.66,
-      barPos: '50%',
-    },
-    Poor: {
-      desc: 'Air quality is poor. Everyone may begin to experience health effects.',
-      gradient: 'var(--grad-poor)',
-      color: COLORS.poor,
-      ringPct: 1.0,
-      barPos: '83.3%',
-    },
+  /* ── Sensors ─────────────────────────────────────────── */
+  function rng(a,b){return a+Math.random()*(b-a)}
+  function genData() {
+    // Model boundaries: Gas <50 → Good, 50-80 → Moderate, >80 → Poor
+    const r = Math.random();
+    const gas = r < 0.4 ? Math.round(rng(5, 45))      // 40% → Good range
+              : r < 0.65 ? Math.round(rng(45, 85))     // 25% → Moderate range
+              : Math.round(rng(85, 200));               // 35% → Poor range
+    return { gas, temp:Math.round(rng(15,35)*10)/10, hum:Math.round(rng(20,75)*10)/10 };
+  }
+
+  function localPredict(g,t,h) {
+    let s=0; if(g>400)s+=3;else if(g>250)s+=2;else if(g>150)s+=1;
+    if(t>35||t<18)s+=1; if(t>40)s+=1; if(h>70||h<25)s+=1;
+    return s>=4?'Poor':s>=2?'Moderate':'Good';
+  }
+
+  function calcAqiScore(category, confidence) {
+    if (!confidence) return category==='Good'?25:category==='Moderate'?100:200;
+    const gConf=confidence.Good||0, mConf=confidence.Moderate||0, pConf=confidence.Poor||0;
+    return Math.round(gConf*25 + mConf*100 + pConf*250);
+  }
+
+  const META = {
+    Good:{ desc:'Air quality is satisfactory and poses little or no health risk.', color:COLORS.good, barPct:8 },
+    Moderate:{ desc:'Moderate air quality. Sensitive groups may experience effects.', color:COLORS.moderate, barPct:40 },
+    Poor:{ desc:'Air quality is poor. Everyone may experience health effects.', color:COLORS.poor, barPct:80 }
   };
 
-  /* ── Sparkline Renderer (Canvas-based) ──────────────────── */
-  function renderSparkline(container, data, color) {
-    // Create or reuse canvas
-    let canvas = container.querySelector('canvas');
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.width  = container.clientWidth || 200;
-      canvas.height = 32;
-      canvas.style.width = '100%';
-      canvas.style.height = '32px';
-      container.appendChild(canvas);
-    }
-
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    if (data.length < 2) return;
-
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const range = max - min || 1;
-    const step = w / (data.length - 1);
-
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, color + '30');
-    grad.addColorStop(1, 'transparent');
-
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = i * step;
-      const y = h - ((v - min) / range) * (h - 4) - 2;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-
-    // Fill area under line
-    ctx.lineTo((data.length - 1) * step, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // Stroke line
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = i * step;
-      const y = h - ((v - min) / range) * (h - 4) - 2;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.8;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Dot on last point
-    const lastX = (data.length - 1) * step;
-    const lastY = h - ((data[data.length - 1] - min) / range) * (h - 4) - 2;
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
+  /* ── Mini trend lines ────────────────────────────────── */
+  function updateTrend(id, vals, color) {
+    const el = document.querySelector(`#trend-line-${id}`);
+    if (!el || vals.length < 2) return;
+    const min=Math.min(...vals), max=Math.max(...vals), range=max-min||1;
+    const pts = vals.slice(-6).map((v,i,a) => `${(i/(a.length-1))*24},${14-((v-min)/range)*12}`).join(' ');
+    el.setAttribute('points', pts);
+    el.setAttribute('stroke', color);
   }
 
-  /* ── History Line Chart ─────────────────────────────────── */
-  function drawHistoryChart() {
-    const canvas = dom.canvasHistory;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const w = rect.width - 48;  // padding
-    const h = 200;
+  /* ── History Chart ───────────────────────────────────── */
+  function drawHistory() {
+    const canvas=dom.canvasHistory, dpr=window.devicePixelRatio||1;
+    const rect=canvas.parentElement.getBoundingClientRect();
+    const w=rect.width-44, h=190;
+    canvas.width=w*dpr; canvas.height=h*dpr; canvas.style.width=w+'px'; canvas.style.height=h+'px';
+    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
 
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
+    const sets=[{data:state.history.gas,color:COLORS.gas},{data:state.history.temp,color:COLORS.temp},{data:state.history.hum,color:COLORS.hum}];
+    const pL=40, pB=30, cW=w-pL-10, cH=h-pB-10;
+    let all=[]; sets.forEach(s=>all.push(...s.data));
+    if(!all.length) return;
+    let gMin=Math.min(...all), gMax=Math.max(...all), range=gMax-gMin||1;
+    gMin-=range*0.08; gMax+=range*0.08; const yR=gMax-gMin;
 
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, w, h);
-
-    const datasets = [
-      { data: state.history.gas,  color: COLORS.gas,  label: 'Gas' },
-      { data: state.history.temp, color: COLORS.temp, label: 'Temp' },
-      { data: state.history.hum,  color: COLORS.hum,  label: 'Hum' },
-    ];
-
-    // Y-axis grid
-    const padLeft = 36;
-    const padBottom = 24;
-    const chartW = w - padLeft - 10;
-    const chartH = h - padBottom - 10;
-
-    // Find global min/max across all datasets
-    let allVals = [];
-    datasets.forEach(ds => allVals.push(...ds.data));
-    if (allVals.length === 0) return;
-    let gMin = Math.min(...allVals);
-    let gMax = Math.max(...allVals);
-    const range = gMax - gMin || 1;
-    gMin -= range * 0.05;
-    gMax += range * 0.05;
-    const yRange = gMax - gMin;
-
-    // Grid lines
-    const gridLines = 5;
-    ctx.font = '10px Inter, sans-serif';
-    ctx.textAlign = 'right';
-    for (let i = 0; i <= gridLines; i++) {
-      const val = gMin + (yRange / gridLines) * i;
-      const y = 10 + chartH - (chartH / gridLines) * i;
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padLeft, y);
-      ctx.lineTo(w - 10, y);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText(Math.round(val), padLeft - 6, y + 3);
+    // Grid
+    ctx.font='10px Inter,sans-serif'; ctx.textAlign='right';
+    for(let i=0;i<=5;i++){
+      const val=gMin+(yR/5)*i, y=10+cH-(cH/5)*i;
+      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(w-10,y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='#94a3b8'; ctx.fillText(Math.round(val),pL-6,y+3);
     }
 
-    // Draw datasets
-    datasets.forEach(ds => {
-      if (ds.data.length < 2) return;
-      const step = chartW / (HISTORY_LENGTH - 1);
+    // Time labels
+    const ts=state.history.timestamps;
+    if(ts.length>1){
+      ctx.textAlign='center'; ctx.fillStyle='#94a3b8'; ctx.font='9px Inter,sans-serif';
+      const step=cW/(HISTORY_LEN-1);
+      ts.forEach((t,i)=>{ if(i%2===0||i===ts.length-1) ctx.fillText(t,pL+i*step,h-6); });
+    }
 
-      // Gradient fill under line
-      const grad = ctx.createLinearGradient(0, 10, 0, 10 + chartH);
-      grad.addColorStop(0, ds.color + '18');
-      grad.addColorStop(1, 'transparent');
-
+    // Lines
+    sets.forEach(ds=>{
+      if(ds.data.length<2) return;
+      const step=cW/(HISTORY_LEN-1);
       ctx.beginPath();
-      ds.data.forEach((v, i) => {
-        const x = padLeft + i * step;
-        const y = 10 + chartH - ((v - gMin) / yRange) * chartH;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      ds.data.forEach((v,i)=>{
+        const x=pL+i*step, y=10+cH-((v-gMin)/yR)*cH;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       });
-      const lastIdx = ds.data.length - 1;
-      ctx.lineTo(padLeft + lastIdx * step, 10 + chartH);
-      ctx.lineTo(padLeft, 10 + chartH);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Line
-      ctx.beginPath();
-      ds.data.forEach((v, i) => {
-        const x = padLeft + i * step;
-        const y = 10 + chartH - ((v - gMin) / yRange) * chartH;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = ds.color;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.stroke();
-
+      ctx.strokeStyle=ds.color; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
       // End dot
-      const ly = 10 + chartH - ((ds.data[lastIdx] - gMin) / yRange) * chartH;
-      ctx.beginPath();
-      ctx.arc(padLeft + lastIdx * step, ly, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = ds.color;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(padLeft + lastIdx * step, ly, 6, 0, Math.PI * 2);
-      ctx.fillStyle = ds.color + '25';
-      ctx.fill();
+      const li=ds.data.length-1, ly=10+cH-((ds.data[li]-gMin)/yR)*cH;
+      ctx.beginPath(); ctx.arc(pL+li*step,ly,3,0,Math.PI*2); ctx.fillStyle=ds.color; ctx.fill();
     });
   }
 
-  /* ── Donut Chart ────────────────────────────────────────── */
-  function drawDonutChart() {
-    const canvas = dom.canvasDonut;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = 180 * dpr;
-    canvas.height = 180 * dpr;
-    canvas.style.width = '180px';
-    canvas.style.height = '180px';
-
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, 180, 180);
-
-    const total = state.totalReadings || 1;
-    const data = [
-      { label: 'Good',     value: state.distribution.Good,     color: COLORS.good },
-      { label: 'Moderate', value: state.distribution.Moderate, color: COLORS.moderate },
-      { label: 'Poor',     value: state.distribution.Poor,     color: COLORS.poor },
-    ];
-
-    const cx = 90, cy = 90, r = 70, thickness = 18;
-    let startAngle = -Math.PI / 2;
-
-    data.forEach(seg => {
-      const sweep = (seg.value / total) * Math.PI * 2;
-      if (sweep === 0) return;
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, startAngle, startAngle + sweep);
-      ctx.arc(cx, cy, r - thickness, startAngle + sweep, startAngle, true);
-      ctx.closePath();
-      ctx.fillStyle = seg.color;
-      ctx.fill();
-
-      startAngle += sweep;
+  /* ── Donut Chart ─────────────────────────────────────── */
+  function drawDonut() {
+    const canvas=dom.canvasDonut, dpr=window.devicePixelRatio||1;
+    canvas.width=160*dpr; canvas.height=160*dpr; canvas.style.width='160px'; canvas.style.height='160px';
+    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,160,160);
+    const total=state.totalReadings||1;
+    const data=[{l:'Good',v:state.distribution.Good,c:COLORS.good},{l:'Moderate',v:state.distribution.Moderate,c:COLORS.moderate},{l:'Poor',v:state.distribution.Poor,c:COLORS.poor}];
+    const cx=80,cy=80,r=65,th=20; let sa=-Math.PI/2;
+    data.forEach(seg=>{
+      const sw=(seg.v/total)*Math.PI*2; if(!sw) return;
+      ctx.beginPath(); ctx.arc(cx,cy,r,sa,sa+sw); ctx.arc(cx,cy,r-th,sa+sw,sa,true);
+      ctx.closePath(); ctx.fillStyle=seg.c; ctx.fill(); sa+=sw;
     });
+    if(!state.totalReadings){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.arc(cx,cy,r-th,Math.PI*2,0,true); ctx.closePath(); ctx.fillStyle='#e2e8f0'; ctx.fill(); }
 
-    // Empty state ring
-    if (state.totalReadings === 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.arc(cx, cy, r - thickness, Math.PI * 2, 0, true);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
-      ctx.fill();
-    }
-
-    // Update center text
-    dom.donutCenter.innerHTML = `${state.totalReadings}<br><small>readings</small>`;
-
-    // Update legend
-    dom.donutLegend.innerHTML = data.map(d =>
-      `<span><span class="legend-dot" style="background:${d.color}"></span>${d.label}: ${d.value}</span>`
+    dom.donutLegend.innerHTML = data.filter(d=>d.v>0).map(d =>
+      `<div class="donut-legend-item"><div class="donut-legend-left"><span class="legend-dot" style="background:${d.c}"></span>${d.l}</div><span class="donut-legend-count">${d.v}</span></div>`
     ).join('');
   }
 
-  /* ── Value Animator ─────────────────────────────────────── */
-  function animateValue(el, newVal) {
-    el.style.transition = 'none';
-    el.style.opacity = '0.4';
-    el.style.transform = 'translateY(-4px)';
-    requestAnimationFrame(() => {
-      el.textContent = newVal;
-      el.style.transition = 'opacity 0.35s, transform 0.35s';
-      el.style.opacity = '1';
-      el.style.transform = 'translateY(0)';
+  /* ── Average Bar Chart ───────────────────────────────── */
+  function drawAverages() {
+    const canvas=dom.canvasAvg, dpr=window.devicePixelRatio||1;
+    const rect=canvas.parentElement.getBoundingClientRect();
+    const w=rect.width-44, h=170;
+    canvas.width=w*dpr; canvas.height=h*dpr; canvas.style.width=w+'px'; canvas.style.height=h+'px';
+    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+    if(!state.totalReadings) return;
+
+    const n=state.totalReadings;
+    const vals=[
+      {label:'Gas Index',value:state.totals.gas/n,color:COLORS.gas},
+      {label:'Temperature',value:state.totals.temp/n,color:COLORS.temp},
+      {label:'Humidity',value:state.totals.hum/n,color:COLORS.hum}
+    ];
+    const maxVal=Math.max(...vals.map(v=>v.value),1);
+    const pL=40, pB=30, cH=h-pB-10, barW=50, gap=(w-pL-10)/(vals.length);
+
+    // Y grid
+    ctx.font='10px Inter,sans-serif'; ctx.textAlign='right'; ctx.fillStyle='#94a3b8';
+    const gridMax=Math.ceil(maxVal/30)*30;
+    for(let i=0;i<=4;i++){
+      const val=(gridMax/4)*i, y=10+cH-(cH/4)*i;
+      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(w-10,y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillText(Math.round(val),pL-6,y+3);
+    }
+
+    // Bars
+    vals.forEach((v,i)=>{
+      const x=pL+gap*i+gap/2-barW/2;
+      const barH=(v.value/gridMax)*cH;
+      const y=10+cH-barH;
+      // Bar with rounded top
+      ctx.beginPath();
+      const r=6;
+      ctx.moveTo(x,10+cH); ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+      ctx.lineTo(x+barW-r,y); ctx.quadraticCurveTo(x+barW,y,x+barW,y+r);
+      ctx.lineTo(x+barW,10+cH); ctx.closePath();
+      ctx.fillStyle=v.color; ctx.fill();
+      // Label
+      ctx.fillStyle='#64748b'; ctx.font='11px Inter,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(v.label, x+barW/2, h-8);
     });
   }
 
-  /* ── Alerts ─────────────────────────────────────────────── */
+  /* ── Update UI ───────────────────────────────────────── */
+  function updateAQI(category, score) {
+    const m=META[category];
+    dom.aqiCategory.textContent=category;
+    dom.aqiScoreDisplay.textContent=score;
+    dom.aqiDesc.textContent=m.desc;
+    dom.valAqi.textContent=score;
+    dom.aqiBadgeLabel.textContent=category;
+    dom.aqiBadgeScore.textContent=score;
+
+    // Banner class
+    dom.aqiBanner.className='aqi-banner'+(category!=='Good'?' '+category.toLowerCase():'');
+    // Badge colors
+    const bc=m.color;
+    dom.aqiBadge.style.borderColor=bc; dom.aqiBadge.style.color=bc;
+    dom.aqiBadge.querySelector('.aqi-badge-dot').style.background=bc;
+    // Banner icon color
+    dom.aqiBannerIcon.style.color=bc;
+    dom.aqiBannerIcon.style.background=category==='Good'?'rgba(16,185,129,0.15)':category==='Moderate'?'rgba(234,179,8,0.15)':'rgba(239,68,68,0.15)';
+    // Bar indicator
+    dom.aqiBarIndicator.style.left=Math.min(score/300*100,98)+'%';
+  }
+
+  function animateVal(el,val) {
+    el.style.transition='none'; el.style.opacity='0.3'; el.style.transform='translateY(-3px)';
+    requestAnimationFrame(()=>{ el.textContent=val; el.style.transition='opacity 0.3s,transform 0.3s'; el.style.opacity='1'; el.style.transform='translateY(0)'; });
+  }
+
+  function updateInsights(data, category) {
+    const items = [];
+    if (data.gas > 300) items.push({t:'High gas concentration detected. Consider ventilation.', c:'danger'});
+    else if (data.gas > 150) items.push({t:'Moderate gas concentration detected. Monitor for further increases.', c:'warning'});
+    else items.push({t:'Gas levels are within normal range.', c:''});
+
+    if (data.temp > 35) items.push({t:'Temperature is above comfortable range.', c:'warning'});
+    if (data.hum > 70) items.push({t:'High humidity detected. Consider dehumidification.', c:'warning'});
+    else if (data.hum < 30) items.push({t:'Low humidity detected. Consider using a humidifier.', c:'warning'});
+
+    dom.insightsList.innerHTML = items.map(i =>
+      `<div class="insight-item"><span class="insight-dot ${i.c}"></span><p>${i.t}</p></div>`
+    ).join('');
+  }
+
   function addAlert(msg, type = 'info') {
     const li = document.createElement('li');
     li.className = `alert-item ${type}`;
-    li.textContent = msg;
+    const time = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    li.textContent = `[${time}] ${msg}`;
     dom.alertsList.prepend(li);
-    // Keep max 5 alerts
-    while (dom.alertsList.children.length > 5) {
-      dom.alertsList.removeChild(dom.alertsList.lastChild);
-    }
+    while (dom.alertsList.children.length > 8) dom.alertsList.removeChild(dom.alertsList.lastChild);
   }
 
-  /* ── AQI Ring Update ────────────────────────────────────── */
-  function updateAQIRing(category) {
-    const meta = AQI_META[category];
-    const circumference = 2 * Math.PI * 70; // 439.82
-    const offset = circumference * (1 - meta.ringPct);
-
-    dom.aqiRingFill.style.strokeDashoffset = offset;
-    dom.aqiRingFill.style.stroke = meta.color;
-
-    dom.aqiCategory.textContent = category;
-    dom.aqiCategory.style.background = meta.gradient;
-    dom.aqiCategory.style.webkitBackgroundClip = 'text';
-    dom.aqiCategory.style.webkitTextFillColor = 'transparent';
-    dom.aqiCategory.style.backgroundClip = 'text';
-
-    dom.aqiDesc.textContent = meta.desc;
-    dom.aqiIndicator.style.left = meta.barPos;
+  function updateSessionStats() {
+    const n=state.totalReadings; if(!n) return;
+    dom.avgGas.innerHTML = (state.totals.gas/n).toFixed(1)+' <small>ppm</small>';
+    dom.avgTemp.innerHTML = (state.totals.temp/n).toFixed(1)+' <small>°C</small>';
+    dom.avgHum.innerHTML = (state.totals.hum/n).toFixed(1)+' <small>%</small>';
+    dom.dataPoints.textContent = n;
   }
 
-  /* ── Tick ────────────────────────────────────────────────── */
-  function tick() {
-    const data = generateSensorData();
-
-    // Push to sparkline buffers
-    ['gas', 'pm', 'temp', 'hum'].forEach(key => {
-      state[key].push(data[key]);
-      if (state[key].length > SPARKLINE_LENGTH) state[key].shift();
-    });
-
-    // Push to history
-    ['gas', 'temp', 'hum'].forEach(key => {
-      state.history[key].push(data[key]);
-      if (state.history[key].length > HISTORY_LENGTH) state.history[key].shift();
-    });
+  /* ── Tick ─────────────────────────────────────────────── */
+  async function tick() {
+    const data = genData();
+    // History
+    ['gas','temp','hum'].forEach(k=>{ state.history[k].push(data[k]); if(state.history[k].length>HISTORY_LEN)state.history[k].shift(); });
+    const now=new Date(); const ts=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    state.history.timestamps.push(ts); if(state.history.timestamps.length>HISTORY_LEN)state.history.timestamps.shift();
+    // Trend buffers
+    ['gas','temp','hum'].forEach(k=>{ state.lastVals[k].push(data[k]); if(state.lastVals[k].length>6)state.lastVals[k].shift(); });
 
     // Predict
-    const category = predictAQI(data.gas, data.temp, data.hum);
+    let category, confidence;
+    if(!state.pending) {
+      state.pending=true;
+      try {
+        const r = await fetchPrediction(data.gas,data.temp,data.hum);
+        category=r.prediction; confidence=r.confidence;
+        if(!state.backendConnected) setConn(true);
+      } catch { category=localPredict(data.gas,data.temp,data.hum); if(state.backendConnected)setConn(false); }
+      finally { state.pending=false; }
+    } else { category=localPredict(data.gas,data.temp,data.hum); }
+
+    const score = calcAqiScore(category,confidence);
+    state.aqiScore=score;
     state.distribution[category]++;
     state.totalReadings++;
+    state.totals.gas+=data.gas; state.totals.temp+=data.temp; state.totals.hum+=data.hum;
+
+    // Update UI
+    animateVal(dom.valGas,data.gas);
+    animateVal(dom.valTemp,data.temp.toFixed(1));
+    animateVal(dom.valHum,data.hum.toFixed(1));
+    updateAQI(category,score);
+    dom.timestamp.textContent='Last updated: '+ts;
+
+    updateTrend('gas',state.lastVals.gas,COLORS.gas);
+    updateTrend('temp',state.lastVals.temp,COLORS.temp);
+    updateTrend('hum',state.lastVals.hum,COLORS.hum);
 
     // Alerts on category change
     if (category !== state.lastCategory) {
-      const type = category === 'Good' ? 'success' : category === 'Moderate' ? 'warning' : 'danger';
+      const type = category==='Good'?'success':category==='Moderate'?'warning':'danger';
       addAlert(`AQI shifted to ${category} — Gas: ${data.gas} ppm, Temp: ${data.temp}°C, Hum: ${data.hum}%`, type);
       state.lastCategory = category;
     }
+    if (data.gas > 450) addAlert(`⚠ High gas reading: ${data.gas} ppm`, 'danger');
 
-    // High gas alert
-    if (data.gas > 450) {
-      addAlert(`⚠ High gas reading detected: ${data.gas} ppm`, 'danger');
-    }
-
-    // Update values
-    animateValue(dom.valGas, data.gas);
-    animateValue(dom.valPm, data.pm.toFixed(1));
-    animateValue(dom.valTemp, data.temp.toFixed(1));
-    animateValue(dom.valHum, data.hum.toFixed(1));
-
-    // Model inputs
-    dom.miGas.textContent  = data.gas;
-    dom.miTemp.textContent = data.temp.toFixed(1) + ' °C';
-    dom.miHum.textContent  = data.hum.toFixed(1) + ' %';
-
-    // Timestamp
-    dom.timestamp.textContent = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    });
-
-    // AQI
-    updateAQIRing(category);
-
-    // Sparklines
-    renderSparkline(dom.sparkGas,  state.gas,  COLORS.gas);
-    renderSparkline(dom.sparkPm,   state.pm,   COLORS.pm);
-    renderSparkline(dom.sparkTemp, state.temp,  COLORS.temp);
-    renderSparkline(dom.sparkHum,  state.hum,   COLORS.hum);
-
-    // Charts
-    drawHistoryChart();
-    drawDonutChart();
+    drawHistory(); drawDonut(); drawAverages();
+    updateSessionStats(); updateInsights(data,category);
   }
 
-  /* ── Init ────────────────────────────────────────────────── */
-  function init() {
-    // Set initial timestamp
-    dom.timestamp.textContent = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    });
-
-    // First tick immediately, then repeat
+  /* ── Init ─────────────────────────────────────────────── */
+  async function init() {
+    dom.timestamp.textContent='Last updated: --:--:--';
+    await checkHealth();
     tick();
     setInterval(tick, TICK_MS);
-
-    // Handle resize for history chart
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(drawHistoryChart, 150);
-    });
+    setInterval(checkHealth, 30000);
+    dom.refreshBtn?.addEventListener('click', ()=>tick());
+    let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{drawHistory();drawAverages();},150); });
   }
-
-  // Start when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
 })();
