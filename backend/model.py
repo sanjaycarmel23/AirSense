@@ -1,6 +1,7 @@
 """
 AQaaS — ML Model Module
 Handles loading the pre-trained Random Forest model and running inference.
+Updated to support 4-feature input: Gas Index, Temperature, Humidity, PM2.5
 """
 
 import os
@@ -49,27 +50,51 @@ def load_model(model_path: str):
         return None
 
 
-def predict_aqi(model, gas_index: float, temperature: float, humidity: float) -> dict:
+def get_model_feature_count(model) -> int:
+    """
+    Determine the number of features the model expects.
+    Returns 4 for the new model, 3 for the legacy model.
+    """
+    if model is None:
+        return 4  # default to new model
+    if hasattr(model, "n_features_in_"):
+        return model.n_features_in_
+    if hasattr(model, "feature_names_in_"):
+        return len(model.feature_names_in_)
+    return 4  # default to 4-feature model
+
+
+def predict_aqi(model, gas_index: float, temperature: float, humidity: float, pm25: float = 0.0) -> dict:
     """
     Run AQI prediction using the loaded model.
+    Supports both 3-feature (legacy) and 4-feature (updated) models.
     
     Args:
         model: Trained scikit-learn model.
         gas_index: Gas sensor reading (ppm).
         temperature: Temperature reading (°C).
         humidity: Relative humidity reading (%RH).
+        pm25: PM2.5 particulate matter reading (µg/m³).
     
     Returns:
         Dictionary with:
         - prediction: "Good", "Moderate", or "Poor"
         - confidence: Dict of class probabilities
     """
-    # Prepare feature DataFrame matching training feature order and names.
-    # Using DataFrame avoids sklearn's "X does not have valid feature names" warning.
-    features = pd.DataFrame(
-        [[gas_index, temperature, humidity]],
-        columns=['Gas_Index', 'Temperature', 'Humidity']
-    )
+    feature_count = get_model_feature_count(model)
+
+    if feature_count >= 4:
+        # New 4-feature model: Gas_Index, Temperature, Humidity, PM25
+        features = pd.DataFrame(
+            [[gas_index, temperature, humidity, pm25]],
+            columns=['Gas_Index', 'Temperature', 'Humidity', 'PM25']
+        )
+    else:
+        # Legacy 3-feature model: Gas_Index, Temperature, Humidity
+        features = pd.DataFrame(
+            [[gas_index, temperature, humidity]],
+            columns=['Gas_Index', 'Temperature', 'Humidity']
+        )
 
     # Get prediction
     prediction = model.predict(features)[0]
