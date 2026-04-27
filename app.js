@@ -55,42 +55,92 @@ function initHistoryFilters(){
   });
 }
 
-/* ── Main Tick ─────────────────────────────────────────── */
+/* ── Main Tick — tries MongoDB first, falls back to simulated ── */
+let lastDbTimestamp = null;
+
 async function tick(){
-  const data=genData();
+  let data, category, confidence, score, source='simulated';
+
+  // PRIMARY: Try fetching latest from MongoDB via /api/latest
+  if(!state.pending){
+    state.pending=true;
+    try{
+      const resp = await fetchLatest();
+      if(resp && resp.sensor){
+        const s = resp.sensor;
+        data = {
+          gas: s.gas || 0,
+          temp: s.temperature || 0,
+          hum: s.humidity || 0,
+          pm25: s.pm25 || 0
+        };
+        category = resp.prediction;
+        confidence = resp.confidence;
+        score = resp.aqi_score;
+        source = 'database';
+        if(!state.backendConnected) setConn(true);
+
+        // Skip if same timestamp (no new data in DB)
+        if(s.timestamp && s.timestamp === lastDbTimestamp){
+          state.pending=false;
+          return; // no new data, skip update
+        }
+        lastDbTimestamp = s.timestamp;
+      }
+    }catch(e){
+      // /api/latest failed — will fall back below
+    }
+    state.pending=false;
+  }
+
+  // FALLBACK: Generate simulated data + predict via POST or local
+  if(!data){
+    data = genData();
+    try{
+      const r = await fetchPrediction(data.gas, data.temp, data.hum, data.pm25);
+      category = r.prediction; confidence = r.confidence;
+      if(!state.backendConnected) setConn(true);
+    }catch{
+      category = localPredict(data.gas, data.temp, data.hum, data.pm25);
+      if(state.backendConnected) setConn(false);
+    }
+    score = calcAqiScore(category, confidence);
+    source = 'simulated';
+  }
+
+  // ── Update state ──
   ['gas','temp','hum','pm25'].forEach(k=>{state.history[k].push(data[k]);if(state.history[k].length>HISTORY_LEN)state.history[k].shift();});
   const now=new Date(),ts=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   state.history.timestamps.push(ts);if(state.history.timestamps.length>HISTORY_LEN)state.history.timestamps.shift();
   ['gas','temp','hum','pm25'].forEach(k=>{state.lastVals[k].push(data[k]);if(state.lastVals[k].length>6)state.lastVals[k].shift();});
-  let category,confidence;
-  if(!state.pending){
-    state.pending=true;
-    try{const r=await fetchPrediction(data.gas,data.temp,data.hum,data.pm25);category=r.prediction;confidence=r.confidence;if(!state.backendConnected)setConn(true);}
-    catch{category=localPredict(data.gas,data.temp,data.hum,data.pm25);if(state.backendConnected)setConn(false);}
-    finally{state.pending=false;}
-  }else{category=localPredict(data.gas,data.temp,data.hum,data.pm25);}
-  const score=calcAqiScore(category,confidence);
-  state.aqiScore=score;state.lastCategory=category;state.distribution[category]++;state.totalReadings++;
+
+  state.aqiScore=score;state.distribution[category]++;state.totalReadings++;
   state.totals.gas+=data.gas;state.totals.temp+=data.temp;state.totals.hum+=data.hum;state.totals.pm25+=data.pm25;
-  state.allReadings.push({gas:data.gas,temp:data.temp,hum:data.hum,pm25:data.pm25,score,category,time:ts});
+  state.allReadings.push({gas:data.gas,temp:data.temp,hum:data.hum,pm25:data.pm25,score,category,time:ts,source});
   if(state.allReadings.length>200)state.allReadings.shift();
+
+  // ── Update UI ──
   animateVal($('val-gas'),data.gas);
-  animateVal($('val-temp'),data.temp.toFixed(1));
-  animateVal($('val-hum'),data.hum.toFixed(1));
-  animateVal($('val-pm25'),data.pm25.toFixed(1));
+  animateVal($('val-temp'),typeof data.temp==='number'?data.temp.toFixed(1):data.temp);
+  animateVal($('val-hum'),typeof data.hum==='number'?data.hum.toFixed(1):data.hum);
+  animateVal($('val-pm25'),typeof data.pm25==='number'?data.pm25.toFixed(1):data.pm25);
   updateAQI(category,score);
-  const tsEl=$('header-timestamp');if(tsEl)tsEl.textContent='Last updated: '+ts;
+  const tsEl=$('header-timestamp');
+  if(tsEl) tsEl.textContent=`Last updated: ${ts}` + (source==='database'?' · from DB':'');
+
   updateTrend('gas',state.lastVals.gas,COLORS.gas);
   updateTrend('temp',state.lastVals.temp,COLORS.temp);
   updateTrend('hum',state.lastVals.hum,COLORS.hum);
   updateTrend('pm25',state.lastVals.pm25,COLORS.pm25);
-  if(category!==state.lastCategory||state.totalReadings===1){
+
+  if(category!==state.lastCategory){
     const type=category==='Good'?'success':category==='Moderate'?'warning':'danger';
     addAlert(`AQI: ${category} — Gas:${data.gas} Temp:${data.temp}°C Hum:${data.hum}% PM2.5:${data.pm25}`,type);
   }
+  state.lastCategory=category;
   if(data.pm25>55)addAlert(`⚠ High PM2.5: ${data.pm25} µg/m³`,'danger');
   if(data.gas>450)addAlert(`⚠ High gas: ${data.gas} ppm`,'danger');
-  // Only redraw visible charts
+
   const activePage=document.querySelector('.page.active');
   if(activePage){
     const id=activePage.id;
@@ -106,6 +156,10 @@ async function init(){
   initSidebar();
   initHistoryFilters();
   await checkHealth();
+
+  if(state.dbConnected) addAlert('MongoDB connected — fetching live sensor data','success');
+  else addAlert('MongoDB not connected — using simulated data','warning');
+
   tick();
   setInterval(tick,TICK_MS);
   setInterval(checkHealth,30000);

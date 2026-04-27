@@ -6,7 +6,8 @@ const state={
   totals:{gas:0,temp:0,hum:0,pm25:0},
   totalReadings:0,lastCategory:'Good',backendConnected:false,pending:false,aqiScore:0,
   lastVals:{gas:[],temp:[],hum:[],pm25:[]},
-  allReadings:[],currentPage:1,perPage:12,activeFilter:'all'
+  allReadings:[],currentPage:1,perPage:12,activeFilter:'all',
+  dbConnected:false
 };
 const $=id=>document.getElementById(id);
 const META={
@@ -14,21 +15,40 @@ const META={
   Moderate:{desc:'Moderate air quality. Sensitive groups may experience effects.',color:COLORS.moderate,barPct:40},
   Poor:{desc:'Air quality is poor. Everyone may experience health effects.',color:COLORS.poor,barPct:80}
 };
+
+/* ── Fetch latest reading from MongoDB via backend ─────── */
+async function fetchLatest(){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),5000);
+  try{
+    const r=await fetch(`${API_BASE}/latest`,{signal:c.signal});
+    clearTimeout(t);
+    if(!r.ok){
+      if(r.status===404) return null; // no data in DB yet
+      throw new Error(`HTTP ${r.status}`);
+    }
+    return await r.json();
+  }catch(e){clearTimeout(t);throw e;}
+}
+
+/* ── Fallback: POST manual prediction ──────────────────── */
 async function fetchPrediction(gas,temp,hum,pm25){
   const c=new AbortController(),t=setTimeout(()=>c.abort(),5000);
   try{const r=await fetch(`${API_BASE}/predict`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gas_index:gas,temperature:temp,humidity:hum,pm25:pm25}),signal:c.signal});clearTimeout(t);if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json();}catch(e){clearTimeout(t);throw e;}
 }
+
 async function checkHealth(){
-  try{const r=await fetch(`${API_BASE}/health`,{signal:AbortSignal.timeout(3000)});if(r.ok){const d=await r.json();setConn(d.status==='ok'&&d.model_loaded);return;}}catch{}setConn(false);
+  try{const r=await fetch(`${API_BASE}/health`,{signal:AbortSignal.timeout(3000)});if(r.ok){const d=await r.json();setConn(d.status==='ok'&&d.model_loaded);state.dbConnected=d.database_connected||false;return;}}catch{}setConn(false);
 }
 function setConn(ok){
   const was=state.backendConnected;state.backendConnected=ok;
   const b=$('connection-badge');if(b){const dot=b.querySelector('.pulse-dot'),lbl=b.querySelector('span:last-child');
-  if(ok){b.style.borderColor='var(--green)';b.style.color='var(--green-dark)';b.style.background='var(--green-light)';if(dot)dot.style.background='var(--green)';if(lbl)lbl.textContent='Live';}
+  if(ok){b.style.borderColor='var(--green)';b.style.color='var(--green-dark)';b.style.background='var(--green-light)';if(dot)dot.style.background='var(--green)';if(lbl)lbl.textContent=state.dbConnected?'Live · DB':'Live';}
   else{b.style.borderColor='var(--orange)';b.style.color='var(--orange)';b.style.background='var(--orange-light)';if(dot)dot.style.background='var(--orange)';if(lbl)lbl.textContent='Offline';}}
   if(ok&&!was)addAlert('ML backend connected — predictions active','success');
   else if(!ok&&was)addAlert('ML backend disconnected — using fallback','warning');
 }
+
+/* ── Simulated data (fallback when DB has no data) ─────── */
 function rng(a,b){return a+Math.random()*(b-a)}
 function genData(){
   const r=Math.random();
