@@ -9,46 +9,60 @@ function updateAQI(cat,score){
 }
 function updateInsights(data,cat){
   const items=[];
-  if(data.gas>300)items.push({t:'High gas concentration detected. Consider ventilation.',c:'danger'});
-  else if(data.gas>150)items.push({t:'Moderate gas concentration. Monitor for increases.',c:'warning'});
-  else items.push({t:'Gas levels are within normal range.',c:''});
-  if(data.pm25>55)items.push({t:'PM2.5 is unhealthy! Avoid outdoor activities.',c:'danger'});
-  else if(data.pm25>25)items.push({t:'PM2.5 exceeds WHO safe limit (25 µg/m³).',c:'warning'});
-  else items.push({t:'PM2.5 levels are within safe limits.',c:''});
-  if(data.temp>35)items.push({t:'Temperature above comfortable range.',c:'warning'});
-  if(data.hum>70)items.push({t:'High humidity. Consider dehumidification.',c:'warning'});
-  else if(data.hum<30)items.push({t:'Low humidity. Consider using a humidifier.',c:'warning'});
+  if(data.co>1400)items.push({t:'High CO concentration detected. Consider ventilation.',c:'danger'});
+  else if(data.co>900)items.push({t:'Moderate CO concentration. Monitor for increases.',c:'warning'});
+  else items.push({t:'CO levels are within normal range.',c:''});
+  if(data.co2>1400)items.push({t:'High CO₂ levels. Improve ventilation immediately.',c:'danger'});
+  else if(data.co2>800)items.push({t:'CO₂ levels elevated. Consider opening windows.',c:'warning'});
+  else items.push({t:'CO₂ levels are within safe limits.',c:''});
+  if(data.no>400)items.push({t:'NO levels are dangerously high! Avoid exposure.',c:'danger'});
+  else if(data.no>100)items.push({t:'NO levels above normal. Monitor closely.',c:'warning'});
+  if(data.no2>180)items.push({t:'NO₂ levels unhealthy! Limit outdoor activities.',c:'danger'});
+  else if(data.no2>80)items.push({t:'NO₂ levels slightly elevated.',c:'warning'});
+  if(data.dust>1.5)items.push({t:'High dust concentration detected.',c:'danger'});
+  else if(data.dust>0.8)items.push({t:'Moderate dust levels. Air filtration recommended.',c:'warning'});
+  if(data.temperature>35)items.push({t:'Temperature above comfortable range.',c:'warning'});
+  if(data.humidity>70)items.push({t:'High humidity. Consider dehumidification.',c:'warning'});
+  else if(data.humidity<30)items.push({t:'Low humidity. Consider using a humidifier.',c:'warning'});
   const el=$('insights-list');if(el)el.innerHTML=items.map(i=>`<div class="insight-item"><span class="insight-dot ${i.c}"></span><p>${i.t}</p></div>`).join('');
 }
 function updateSessionStats(){
   const n=state.totalReadings;if(!n)return;
-  const ag=$('avg-gas'),at=$('avg-temp'),ah=$('avg-hum'),ap=$('avg-pm25'),dp=$('data-points');
-  if(ag)ag.innerHTML=(state.totals.gas/n).toFixed(1)+' <small>ppm</small>';
+  const aco=$('avg-co'),aco2=$('avg-co2'),ano=$('avg-no'),ano2=$('avg-no2'),adust=$('avg-dust'),at=$('avg-temp'),ah=$('avg-hum'),dp=$('data-points');
+  if(aco)aco.innerHTML=(state.totals.co/n).toFixed(1)+' <small>ppm</small>';
+  if(aco2)aco2.innerHTML=(state.totals.co2/n).toFixed(1)+' <small>ppm</small>';
+  if(ano)ano.innerHTML=(state.totals.no/n).toFixed(1)+' <small>ppb</small>';
+  if(ano2)ano2.innerHTML=(state.totals.no2/n).toFixed(1)+' <small>ppb</small>';
+  if(adust)adust.innerHTML=(state.totals.dust/n).toFixed(2)+' <small>mg/m³</small>';
   if(at)at.innerHTML=(state.totals.temp/n).toFixed(1)+' <small>°C</small>';
   if(ah)ah.innerHTML=(state.totals.hum/n).toFixed(1)+' <small>%</small>';
-  if(ap)ap.innerHTML=(state.totals.pm25/n).toFixed(1)+' <small>µg/m³</small>';
   if(dp)dp.textContent=n;
-  const ig=$('insight-avg-gas'),it=$('insight-avg-temp'),ih=$('insight-avg-hum'),ip=$('insight-avg-pm25');
-  if(ig)ig.textContent=(state.totals.gas/n).toFixed(1);
+  const ig=$('insight-avg-co'),ig2=$('insight-avg-co2'),ino=$('insight-avg-no'),ino2=$('insight-avg-no2'),idust=$('insight-avg-dust'),it=$('insight-avg-temp'),ih=$('insight-avg-hum');
+  if(ig)ig.textContent=(state.totals.co/n).toFixed(1);
+  if(ig2)ig2.textContent=(state.totals.co2/n).toFixed(1);
+  if(ino)ino.textContent=(state.totals.no/n).toFixed(1);
+  if(ino2)ino2.textContent=(state.totals.no2/n).toFixed(1);
+  if(idust)idust.textContent=(state.totals.dust/n).toFixed(2);
   if(it)it.textContent=(state.totals.temp/n).toFixed(1)+'°C';
   if(ih)ih.textContent=(state.totals.hum/n).toFixed(1)+'%';
-  if(ip)ip.textContent=(state.totals.pm25/n).toFixed(1);
 }
 function updateAIInsights(){
   const n=state.totalReadings,el=$('ai-insights-list');if(!el||n<3)return;
-  const items=[];const avgGas=state.totals.gas/n,avgPm=state.totals.pm25/n,avgHum=state.totals.hum/n;
+  const items=[];
+  const avgCo=state.totals.co/n,avgCo2=state.totals.co2/n,avgNo=state.totals.no/n,avgHum=state.totals.hum/n;
   const recent=state.allReadings.slice(-5);
   if(recent.length>=3){
-    const gases=recent.map(r=>r.gas),pms=recent.map(r=>r.pm25);
-    const gTrend=gases[gases.length-1]-gases[0],pTrend=pms[pms.length-1]-pms[0];
-    if(gTrend>20)items.push({i:'📈',t:'Gas concentration trending upward. Air quality may be degrading.'});
-    else if(gTrend<-20)items.push({i:'📉',t:'Gas concentration decreasing. Air quality improving.'});
-    if(pTrend>10)items.push({i:'⚠️',t:'PM2.5 levels rising. Consider activating air purifier.'});
-    else if(pTrend<-10)items.push({i:'✅',t:'PM2.5 levels declining. Particulate pollution reducing.'});
+    const cos=recent.map(r=>r.co),co2s=recent.map(r=>r.co2);
+    const coTrend=cos[cos.length-1]-cos[0],co2Trend=co2s[co2s.length-1]-co2s[0];
+    if(coTrend>100)items.push({i:'📈',t:'CO concentration trending upward. Air quality may be degrading.'});
+    else if(coTrend<-100)items.push({i:'📉',t:'CO concentration decreasing. Air quality improving.'});
+    if(co2Trend>200)items.push({i:'⚠️',t:'CO₂ levels rising. Consider improving ventilation.'});
+    else if(co2Trend<-200)items.push({i:'✅',t:'CO₂ levels declining. Ventilation is effective.'});
   }
-  if(avgGas>200)items.push({i:'🔴',t:`Average gas index (${avgGas.toFixed(0)} ppm) is critically high.`});
-  else if(avgGas<50)items.push({i:'🟢',t:`Average gas index (${avgGas.toFixed(0)} ppm) is excellent.`});
-  if(avgPm>35)items.push({i:'😷',t:`Average PM2.5 (${avgPm.toFixed(1)} µg/m³) exceeds safe levels.`});
+  if(avgCo>1200)items.push({i:'🔴',t:`Average CO (${avgCo.toFixed(0)} ppm) is critically high.`});
+  else if(avgCo<700)items.push({i:'🟢',t:`Average CO (${avgCo.toFixed(0)} ppm) is in safe range.`});
+  if(avgCo2>1200)items.push({i:'😷',t:`Average CO₂ (${avgCo2.toFixed(0)} ppm) is elevated.`});
+  if(avgNo>300)items.push({i:'🚨',t:`Average NO (${avgNo.toFixed(0)} ppb) is high. Check emission sources.`});
   if(avgHum>65)items.push({i:'💧',t:'Persistent high humidity may promote mold growth.'});
   const pct=state.distribution.Poor/Math.max(n,1)*100;
   if(pct>40)items.push({i:'🚨',t:`${pct.toFixed(0)}% of readings rated "Poor". Immediate action recommended.`});

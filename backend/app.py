@@ -2,6 +2,7 @@
 AQaaS — Flask Backend Server
 Loads the pre-trained Random Forest model and serves AQI predictions via REST API.
 Fetches live sensor data from MongoDB for predictions.
+Updated for IoT sensor format: dust, co2, no, no2, co, temperature, humidity
 """
 
 import os
@@ -59,7 +60,7 @@ def latest_reading():
 
     Returns:
     {
-        "sensor": { gas, temperature, humidity, pm25, timestamp },
+        "sensor": { dust, co2, no, no2, co, temperature, humidity, timestamp },
         "prediction": "Good" | "Moderate" | "Poor",
         "confidence": { ... },
         "aqi_score": int,
@@ -73,15 +74,19 @@ def latest_reading():
     if sensor is None:
         return jsonify({"error": "No sensor data available in database", "source": "none"}), 404
 
-    gas = sensor.get("gas", 0)
+    dust = sensor.get("dust", 0)
+    co2 = sensor.get("co2", 0)
+    no_val = sensor.get("no", 0)
+    no2_val = sensor.get("no2", 0)
+    co = sensor.get("co", 0)
     temp = sensor.get("temperature", 0)
     hum = sensor.get("humidity", 0)
-    pm25 = sensor.get("pm25", 0)
 
     try:
-        result = predict_aqi(model, gas, temp, hum, pm25)
+        result = predict_aqi(model, dust, co2, no_val, no2_val, co, temp, hum)
         # Store prediction
-        store_prediction(gas, temp, hum, pm25, result["prediction"], result.get("confidence"))
+        store_prediction(dust, co2, no_val, no2_val, co, temp, hum,
+                         result["prediction"], result.get("confidence"))
 
         # Calculate AQI score
         conf = result.get("confidence", {})
@@ -93,8 +98,8 @@ def latest_reading():
         )
 
         logger.info(
-            "Latest: Gas=%.1f, Temp=%.1f, Hum=%.1f, PM2.5=%.1f → %s (AQI %d)",
-            gas, temp, hum, pm25, result["prediction"], aqi_score
+            "Latest: Dust=%.2f, CO2=%.1f, NO=%.1f, NO2=%.1f, CO=%.1f, T=%.1f, H=%.1f → %s (AQI %d)",
+            dust, co2, no_val, no2_val, co, temp, hum, result["prediction"], aqi_score
         )
 
         return jsonify({
@@ -115,26 +120,29 @@ def add_sensor_data():
     """
     Insert sensor data into MongoDB. Used by IoT devices or simulators.
 
-    Expects JSON: { gas, temperature, humidity, pm25 (optional) }
+    Expects JSON: { dust, co2, no, no2, co, temperature, humidity }
     """
     data = request.get_json(silent=True)
     if data is None:
         return jsonify({"error": "Request body must be valid JSON"}), 400
 
-    required = ["gas", "temperature", "humidity"]
+    required = ["temperature", "humidity"]
     missing = [f for f in required if f not in data]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
     try:
-        gas = float(data["gas"])
+        dust = float(data.get("dust", 0))
+        co2 = float(data.get("co2", 0))
+        no_val = float(data.get("no", 0))
+        no2_val = float(data.get("no2", 0))
+        co = float(data.get("co", 0))
         temp = float(data["temperature"])
         hum = float(data["humidity"])
-        pm25 = float(data.get("pm25", 0))
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid data type: {str(e)}"}), 400
 
-    doc_id = insert_sensor_data(gas, temp, hum, pm25)
+    doc_id = insert_sensor_data(dust, co2, no_val, no2_val, co, temp, hum)
     if doc_id:
         return jsonify({"status": "ok", "id": doc_id})
     return jsonify({"error": "Failed to insert — database may not be connected"}), 503
@@ -161,34 +169,34 @@ def predict():
     if data is None:
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
-    required_fields = ["gas_index", "temperature", "humidity"]
+    required_fields = ["temperature", "humidity"]
     missing = [f for f in required_fields if f not in data]
     if missing:
         return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     try:
-        gas_index = float(data["gas_index"])
-        temperature = float(data["temperature"])
-        humidity = float(data["humidity"])
-        pm25 = float(data.get("pm25", 0))
+        dust = float(data.get("dust", 0))
+        co2 = float(data.get("co2", 0))
+        no_val = float(data.get("no", 0))
+        no2_val = float(data.get("no2", 0))
+        co = float(data.get("co", 0))
+        temp = float(data["temperature"])
+        hum = float(data["humidity"])
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid data type: {str(e)}"}), 400
 
     validation_errors = []
-    if gas_index < 0 or gas_index > 2000:
-        validation_errors.append("gas_index should be between 0 and 2000")
-    if temperature < -40 or temperature > 80:
+    if temp < -40 or temp > 80:
         validation_errors.append("temperature should be between -40 and 80")
-    if humidity < 0 or humidity > 100:
+    if hum < 0 or hum > 100:
         validation_errors.append("humidity should be between 0 and 100")
-    if pm25 < 0 or pm25 > 1000:
-        validation_errors.append("pm25 should be between 0 and 1000")
     if validation_errors:
         return jsonify({"error": "Values out of range", "details": validation_errors}), 422
 
     try:
-        result = predict_aqi(model, gas_index, temperature, humidity, pm25)
-        store_prediction(gas_index, temperature, humidity, pm25, result["prediction"], result.get("confidence"))
+        result = predict_aqi(model, dust, co2, no_val, no2_val, co, temp, hum)
+        store_prediction(dust, co2, no_val, no2_val, co, temp, hum,
+                         result["prediction"], result.get("confidence"))
         return jsonify(result)
     except Exception as e:
         logger.exception("Prediction failed")

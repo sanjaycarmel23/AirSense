@@ -1,7 +1,7 @@
 """
 AQaaS — ML Model Module
 Handles loading the pre-trained Random Forest model and running inference.
-Updated to support 4-feature input: Gas Index, Temperature, Humidity, PM2.5
+Updated to support 7-feature IoT input: dust, co2, no, no2, co, temperature, humidity
 """
 
 import os
@@ -53,48 +53,66 @@ def load_model(model_path: str):
 def get_model_feature_count(model) -> int:
     """
     Determine the number of features the model expects.
-    Returns 4 for the new model, 3 for the legacy model.
+    Returns 7 for the IoT model (dust, co2, no, no2, co, temperature, humidity).
     """
     if model is None:
-        return 4  # default to new model
+        return 7  # default to IoT model
     if hasattr(model, "n_features_in_"):
         return model.n_features_in_
     if hasattr(model, "feature_names_in_"):
         return len(model.feature_names_in_)
-    return 4  # default to 4-feature model
+    return 7  # default to IoT model
 
 
-def predict_aqi(model, gas_index: float, temperature: float, humidity: float, pm25: float = 0.0) -> dict:
+def predict_aqi(
+    model,
+    dust: float = 0.0,
+    co2: float = 0.0,
+    no: float = 0.0,
+    no2: float = 0.0,
+    co: float = 0.0,
+    temperature: float = 0.0,
+    humidity: float = 0.0,
+) -> dict:
     """
     Run AQI prediction using the loaded model.
-    Supports both 3-feature (legacy) and 4-feature (updated) models.
+    Dynamically adapts to the model's expected features using feature_names_in_.
     
     Args:
         model: Trained scikit-learn model.
-        gas_index: Gas sensor reading (ppm).
+        dust: Dust / PM2.5 sensor reading.
+        co2: CO2 sensor reading (ppm).
+        no: NO sensor reading (ppb).
+        no2: NO2 sensor reading (ppb).
+        co: CO sensor reading (ppm).
         temperature: Temperature reading (°C).
         humidity: Relative humidity reading (%RH).
-        pm25: PM2.5 particulate matter reading (µg/m³).
     
     Returns:
         Dictionary with:
         - prediction: "Good", "Moderate", or "Poor"
         - confidence: Dict of class probabilities
     """
-    feature_count = get_model_feature_count(model)
+    # All available sensor values mapped to feature names
+    all_features = {
+        "dust": dust,
+        "co2": co2,
+        "no": no,
+        "no2": no2,
+        "co": co,
+        "temperature": temperature,
+        "humidity": humidity,
+    }
 
-    if feature_count >= 4:
-        # New 4-feature model: Gas_Index, Temperature, Humidity, PM25
-        features = pd.DataFrame(
-            [[gas_index, temperature, humidity, pm25]],
-            columns=['Gas_Index', 'Temperature', 'Humidity', 'PM25']
-        )
+    # Build DataFrame using exactly the features the model expects
+    if hasattr(model, "feature_names_in_"):
+        model_features = list(model.feature_names_in_)
     else:
-        # Legacy 3-feature model: Gas_Index, Temperature, Humidity
-        features = pd.DataFrame(
-            [[gas_index, temperature, humidity]],
-            columns=['Gas_Index', 'Temperature', 'Humidity']
-        )
+        # Fallback for models without feature_names_in_
+        model_features = list(all_features.keys())
+
+    row = [all_features.get(f, 0.0) for f in model_features]
+    features = pd.DataFrame([row], columns=model_features)
 
     # Get prediction
     prediction = model.predict(features)[0]

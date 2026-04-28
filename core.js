@@ -1,11 +1,11 @@
 const TICK_MS=3000,HISTORY_LEN=15,API_BASE='http://localhost:5000/api';
-const COLORS={gas:'#3b82f6',temp:'#f97316',hum:'#06b6d4',pm25:'#8b5cf6',good:'#10b981',moderate:'#eab308',poor:'#ef4444'};
+const COLORS={dust:'#8b5cf6',co2:'#3b82f6',no:'#f97316',no2:'#ef4444',co:'#64748b',temp:'#f59e0b',hum:'#06b6d4',good:'#10b981',moderate:'#eab308',poor:'#ef4444'};
 const state={
-  history:{gas:[],temp:[],hum:[],pm25:[],timestamps:[]},
+  history:{dust:[],co2:[],no:[],no2:[],co:[],temp:[],hum:[],timestamps:[]},
   distribution:{Good:0,Moderate:0,Poor:0},
-  totals:{gas:0,temp:0,hum:0,pm25:0},
+  totals:{dust:0,co2:0,no:0,no2:0,co:0,temp:0,hum:0},
   totalReadings:0,lastCategory:'Good',backendConnected:false,pending:false,aqiScore:0,
-  lastVals:{gas:[],temp:[],hum:[],pm25:[]},
+  lastVals:{dust:[],co2:[],no:[],no2:[],co:[],temp:[],hum:[]},
   allReadings:[],currentPage:1,perPage:12,activeFilter:'all',
   dbConnected:false
 };
@@ -31,9 +31,9 @@ async function fetchLatest(){
 }
 
 /* ── Fallback: POST manual prediction ──────────────────── */
-async function fetchPrediction(gas,temp,hum,pm25){
+async function fetchPrediction(d){
   const c=new AbortController(),t=setTimeout(()=>c.abort(),5000);
-  try{const r=await fetch(`${API_BASE}/predict`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gas_index:gas,temperature:temp,humidity:hum,pm25:pm25}),signal:c.signal});clearTimeout(t);if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json();}catch(e){clearTimeout(t);throw e;}
+  try{const r=await fetch(`${API_BASE}/predict`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d),signal:c.signal});clearTimeout(t);if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json();}catch(e){clearTimeout(t);throw e;}
 }
 
 async function checkHealth(){
@@ -52,15 +52,26 @@ function setConn(ok){
 function rng(a,b){return a+Math.random()*(b-a)}
 function genData(){
   const r=Math.random();
-  const gas=r<0.4?Math.round(rng(5,45)):r<0.65?Math.round(rng(45,85)):Math.round(rng(85,200));
-  const pm25=r<0.4?Math.round(rng(5,25)*10)/10:r<0.65?Math.round(rng(25,55)*10)/10:Math.round(rng(55,150)*10)/10;
-  return{gas,temp:Math.round(rng(15,35)*10)/10,hum:Math.round(rng(20,75)*10)/10,pm25};
+  const co=r<0.4?Math.round(rng(600,900)):r<0.65?Math.round(rng(900,1400)):Math.round(rng(1400,2000));
+  const co2=r<0.4?Math.round(rng(400,800)):r<0.65?Math.round(rng(800,1400)):Math.round(rng(1400,2200));
+  const no_val=r<0.4?Math.round(rng(10,100)):r<0.65?Math.round(rng(100,400)):Math.round(rng(400,1000));
+  const no2_val=r<0.4?Math.round(rng(20,80)):r<0.65?Math.round(rng(80,180)):Math.round(rng(180,340));
+  const dust=Math.round(rng(0.1,2.2)*100)/100;
+  return{
+    dust,co2,no:no_val,no2:no2_val,co,
+    temperature:Math.round(rng(15,40)*10)/10,
+    humidity:Math.round(rng(20,80)*10)/10
+  };
 }
-function localPredict(g,t,h,p){
-  let s=0;if(g>400)s+=3;else if(g>250)s+=2;else if(g>150)s+=1;
-  if(t>35||t<18)s+=1;if(t>40)s+=1;if(h>70||h<25)s+=1;
-  if(p>55)s+=2;else if(p>25)s+=1;
-  return s>=4?'Poor':s>=2?'Moderate':'Good';
+function localPredict(d){
+  let s=0;
+  if(d.co>1400)s+=3;else if(d.co>900)s+=2;else if(d.co>600)s+=1;
+  if(d.co2>1400)s+=2;else if(d.co2>800)s+=1;
+  if(d.no>400)s+=2;else if(d.no>100)s+=1;
+  if(d.no2>180)s+=2;else if(d.no2>80)s+=1;
+  if(d.temperature>35||d.temperature<18)s+=1;
+  if(d.humidity>70||d.humidity<25)s+=1;
+  return s>=6?'Poor':s>=3?'Moderate':'Good';
 }
 function calcAqiScore(cat,conf){
   if(!conf)return cat==='Good'?25:cat==='Moderate'?100:200;

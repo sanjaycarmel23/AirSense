@@ -2,6 +2,7 @@
 AQaaS — MongoDB Database Module
 Manages connection to MongoDB Atlas and provides CRUD operations.
 Collections: 'predictions' and 'sensor_data'
+Updated for IoT sensor format: dust, co2, no, no2, co, temperature, humidity
 """
 
 import os
@@ -68,7 +69,10 @@ def get_db():
 
 # ── sensor_data Collection ───────────────────────────────────
 
-def insert_sensor_data(gas, temperature, humidity, pm25=0.0):
+SENSOR_FIELDS = ["dust", "co2", "no", "no2", "co", "temperature", "humidity"]
+
+
+def insert_sensor_data(dust=0, co2=0, no=0, no2=0, co=0, temperature=0, humidity=0):
     """
     Insert a sensor reading into the 'sensor_data' collection.
     Called by IoT devices or a simulator.
@@ -78,10 +82,13 @@ def insert_sensor_data(gas, temperature, humidity, pm25=0.0):
         return None
     try:
         doc = {
-            "gas": round(float(gas), 2),
+            "dust": round(float(dust), 2),
+            "co2": round(float(co2), 2),
+            "no": round(float(no), 2),
+            "no2": round(float(no2), 2),
+            "co": round(float(co), 2),
             "temperature": round(float(temperature), 2),
             "humidity": round(float(humidity), 2),
-            "pm25": round(float(pm25), 2),
             "timestamp": datetime.now(timezone.utc),
         }
         result = db.sensor_data.insert_one(doc)
@@ -94,21 +101,27 @@ def insert_sensor_data(gas, temperature, humidity, pm25=0.0):
 def get_latest_sensor_data():
     """
     Fetch the most recent sensor reading from 'sensor_data'.
-    Returns dict with gas, temperature, humidity, pm25, timestamp — or None.
+    Returns dict with dust, co2, no, no2, co, temperature, humidity, timestamp — or None.
     """
     db = get_db()
     if db is None:
         return None
     try:
+        projection = {"_id": 0, "timestamp": 1}
+        for f in SENSOR_FIELDS:
+            projection[f] = 1
         doc = db.sensor_data.find_one(
             {},
-            {"_id": 0, "gas": 1, "temperature": 1, "humidity": 1, "pm25": 1, "timestamp": 1},
+            projection,
             sort=[("timestamp", -1)]
         )
         if doc and doc.get("timestamp"):
             doc["timestamp"] = doc["timestamp"].isoformat()
-        if doc and "pm25" not in doc:
-            doc["pm25"] = 0.0
+        # Ensure all fields present with defaults
+        if doc:
+            for f in SENSOR_FIELDS:
+                if f not in doc:
+                    doc[f] = 0.0
         return doc
     except Exception as e:
         logger.error("Failed to fetch latest sensor data: %s", str(e))
@@ -121,15 +134,19 @@ def get_sensor_history(limit=50):
     if db is None:
         return []
     try:
+        projection = {"_id": 0, "timestamp": 1}
+        for f in SENSOR_FIELDS:
+            projection[f] = 1
         cursor = db.sensor_data.find(
             {},
-            {"_id": 0, "gas": 1, "temperature": 1, "humidity": 1, "pm25": 1, "timestamp": 1}
+            projection
         ).sort("timestamp", -1).limit(limit)
         records = []
         for doc in cursor:
             doc["timestamp"] = doc["timestamp"].isoformat() if doc.get("timestamp") else None
-            if "pm25" not in doc:
-                doc["pm25"] = 0.0
+            for f in SENSOR_FIELDS:
+                if f not in doc:
+                    doc[f] = 0.0
             records.append(doc)
         return records
     except Exception as e:
@@ -139,17 +156,20 @@ def get_sensor_history(limit=50):
 
 # ── predictions Collection ───────────────────────────────────
 
-def store_prediction(gas_index, temperature, humidity, pm25, prediction, confidence=None):
+def store_prediction(dust, co2, no, no2, co, temperature, humidity, prediction, confidence=None):
     """Store a prediction record in 'predictions'."""
     db = get_db()
     if db is None:
         return None
     try:
         doc = {
-            "gas_index": round(float(gas_index), 2),
+            "dust": round(float(dust), 2),
+            "co2": round(float(co2), 2),
+            "no": round(float(no), 2),
+            "no2": round(float(no2), 2),
+            "co": round(float(co), 2),
             "temperature": round(float(temperature), 2),
             "humidity": round(float(humidity), 2),
-            "pm25": round(float(pm25), 2),
             "prediction": str(prediction),
             "confidence": confidence or {},
             "timestamp": datetime.now(timezone.utc),
@@ -167,16 +187,19 @@ def get_predictions(limit=50):
     if db is None:
         return []
     try:
+        projection = {"_id": 0, "prediction": 1, "confidence": 1, "timestamp": 1}
+        for f in SENSOR_FIELDS:
+            projection[f] = 1
         cursor = db.predictions.find(
             {},
-            {"_id": 0, "gas_index": 1, "temperature": 1, "humidity": 1,
-             "pm25": 1, "prediction": 1, "confidence": 1, "timestamp": 1}
+            projection
         ).sort("timestamp", -1).limit(limit)
         records = []
         for doc in cursor:
             doc["timestamp"] = doc["timestamp"].isoformat() if doc.get("timestamp") else None
-            if "pm25" not in doc:
-                doc["pm25"] = 0.0
+            for f in SENSOR_FIELDS:
+                if f not in doc:
+                    doc[f] = 0.0
             records.append(doc)
         return records
     except Exception as e:
@@ -194,10 +217,13 @@ def get_prediction_stats():
             {"$group": {
                 "_id": None,
                 "total": {"$sum": 1},
-                "avg_gas": {"$avg": "$gas_index"},
+                "avg_dust": {"$avg": {"$ifNull": ["$dust", 0]}},
+                "avg_co2": {"$avg": {"$ifNull": ["$co2", 0]}},
+                "avg_no": {"$avg": {"$ifNull": ["$no", 0]}},
+                "avg_no2": {"$avg": {"$ifNull": ["$no2", 0]}},
+                "avg_co": {"$avg": {"$ifNull": ["$co", 0]}},
                 "avg_temp": {"$avg": "$temperature"},
                 "avg_hum": {"$avg": "$humidity"},
-                "avg_pm25": {"$avg": {"$ifNull": ["$pm25", 0]}},
             }}
         ]
         agg_result = list(db.predictions.aggregate(pipeline))
@@ -208,10 +234,13 @@ def get_prediction_stats():
             stats = agg_result[0]
             return {
                 "total_predictions": stats["total"],
-                "avg_gas_index": round(stats["avg_gas"], 2),
+                "avg_dust": round(stats.get("avg_dust", 0) or 0, 2),
+                "avg_co2": round(stats.get("avg_co2", 0) or 0, 2),
+                "avg_no": round(stats.get("avg_no", 0) or 0, 2),
+                "avg_no2": round(stats.get("avg_no2", 0) or 0, 2),
+                "avg_co": round(stats.get("avg_co", 0) or 0, 2),
                 "avg_temperature": round(stats["avg_temp"], 2),
                 "avg_humidity": round(stats["avg_hum"], 2),
-                "avg_pm25": round(stats.get("avg_pm25", 0) or 0, 2),
                 "distribution": {
                     "Good": distribution.get("Good", 0),
                     "Moderate": distribution.get("Moderate", 0),

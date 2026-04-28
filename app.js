@@ -18,7 +18,7 @@ function initSidebar(){
       document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
       const target=$('page-'+page);if(target)target.classList.add('active');
       if(window.innerWidth<=768&&sidebar)sidebar.classList.remove('mobile-open');
-      if(page==='analytics'){setTimeout(()=>{drawHistory();drawDonut();drawAverages();drawPM25();},50);}
+      if(page==='analytics'){setTimeout(()=>{drawHistory();drawDonut();drawAverages();drawCO();},50);}
       if(page==='history')renderHistory();
       if(page==='insights'){updateAIInsights();setTimeout(drawGauge,50);}
     });
@@ -37,7 +37,7 @@ function renderHistory(){
   if(countEl)countEl.textContent=`Showing ${pageData.length} of ${total} records`;
   tbody.innerHTML=pageData.map((r,i)=>{
     const cls=r.category.toLowerCase();
-    return `<tr><td>${start+i+1}</td><td>${r.time}</td><td>${r.gas}</td><td>${r.temp}</td><td>${r.hum}</td><td>${r.pm25}</td><td>${r.score}</td><td><span class="status-badge ${cls}">${r.category}</span></td></tr>`;
+    return `<tr><td>${start+i+1}</td><td>${r.time}</td><td>${r.co}</td><td>${r.co2}</td><td>${r.no}</td><td>${r.no2}</td><td>${r.dust}</td><td>${r.temperature}</td><td>${r.humidity}</td><td>${r.score}</td><td><span class="status-badge ${cls}">${r.category}</span></td></tr>`;
   }).join('');
   if(pagEl){
     let btns='';for(let i=1;i<=pages;i++)btns+=`<button class="page-btn${i===state.currentPage?' active':''}" data-p="${i}">${i}</button>`;
@@ -69,10 +69,13 @@ async function tick(){
       if(resp && resp.sensor){
         const s = resp.sensor;
         data = {
-          gas: s.gas || 0,
-          temp: s.temperature || 0,
-          hum: s.humidity || 0,
-          pm25: s.pm25 || 0
+          dust: s.dust || 0,
+          co2: s.co2 || 0,
+          no: s.no || 0,
+          no2: s.no2 || 0,
+          co: s.co || 0,
+          temperature: s.temperature || 0,
+          humidity: s.humidity || 0
         };
         category = resp.prediction;
         confidence = resp.confidence;
@@ -97,11 +100,11 @@ async function tick(){
   if(!data){
     data = genData();
     try{
-      const r = await fetchPrediction(data.gas, data.temp, data.hum, data.pm25);
+      const r = await fetchPrediction(data);
       category = r.prediction; confidence = r.confidence;
       if(!state.backendConnected) setConn(true);
     }catch{
-      category = localPredict(data.gas, data.temp, data.hum, data.pm25);
+      category = localPredict(data);
       if(state.backendConnected) setConn(false);
     }
     score = calcAqiScore(category, confidence);
@@ -109,43 +112,58 @@ async function tick(){
   }
 
   // ── Update state ──
-  ['gas','temp','hum','pm25'].forEach(k=>{state.history[k].push(data[k]);if(state.history[k].length>HISTORY_LEN)state.history[k].shift();});
+  const keys=['dust','co2','no','no2','co'];
+  const envKeys=['temp','hum'];
+  keys.forEach(k=>{state.history[k].push(data[k]);if(state.history[k].length>HISTORY_LEN)state.history[k].shift();});
+  state.history.temp.push(data.temperature);if(state.history.temp.length>HISTORY_LEN)state.history.temp.shift();
+  state.history.hum.push(data.humidity);if(state.history.hum.length>HISTORY_LEN)state.history.hum.shift();
+
   const now=new Date(),ts=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   state.history.timestamps.push(ts);if(state.history.timestamps.length>HISTORY_LEN)state.history.timestamps.shift();
-  ['gas','temp','hum','pm25'].forEach(k=>{state.lastVals[k].push(data[k]);if(state.lastVals[k].length>6)state.lastVals[k].shift();});
+
+  keys.forEach(k=>{state.lastVals[k].push(data[k]);if(state.lastVals[k].length>6)state.lastVals[k].shift();});
+  state.lastVals.temp.push(data.temperature);if(state.lastVals.temp.length>6)state.lastVals.temp.shift();
+  state.lastVals.hum.push(data.humidity);if(state.lastVals.hum.length>6)state.lastVals.hum.shift();
 
   state.aqiScore=score;state.distribution[category]++;state.totalReadings++;
-  state.totals.gas+=data.gas;state.totals.temp+=data.temp;state.totals.hum+=data.hum;state.totals.pm25+=data.pm25;
-  state.allReadings.push({gas:data.gas,temp:data.temp,hum:data.hum,pm25:data.pm25,score,category,time:ts,source});
+  state.totals.dust+=data.dust;state.totals.co2+=data.co2;state.totals.no+=data.no;state.totals.no2+=data.no2;state.totals.co+=data.co;state.totals.temp+=data.temperature;state.totals.hum+=data.humidity;
+  state.allReadings.push({dust:data.dust,co2:data.co2,no:data.no,no2:data.no2,co:data.co,temperature:data.temperature,humidity:data.humidity,score,category,time:ts,source});
   if(state.allReadings.length>200)state.allReadings.shift();
 
   // ── Update UI ──
-  animateVal($('val-gas'),data.gas);
-  animateVal($('val-temp'),typeof data.temp==='number'?data.temp.toFixed(1):data.temp);
-  animateVal($('val-hum'),typeof data.hum==='number'?data.hum.toFixed(1):data.hum);
-  animateVal($('val-pm25'),typeof data.pm25==='number'?data.pm25.toFixed(1):data.pm25);
+  animateVal($('val-co'),data.co);
+  animateVal($('val-co2'),data.co2);
+  animateVal($('val-no'),typeof data.no==='number'?data.no.toFixed(1):data.no);
+  animateVal($('val-no2'),typeof data.no2==='number'?data.no2.toFixed(1):data.no2);
+  animateVal($('val-dust'),typeof data.dust==='number'?data.dust.toFixed(2):data.dust);
+  animateVal($('val-temp'),typeof data.temperature==='number'?data.temperature.toFixed(1):data.temperature);
+  animateVal($('val-hum'),typeof data.humidity==='number'?data.humidity.toFixed(1):data.humidity);
   updateAQI(category,score);
   const tsEl=$('header-timestamp');
   if(tsEl) tsEl.textContent=`Last updated: ${ts}` + (source==='database'?' · from DB':'');
 
-  updateTrend('gas',state.lastVals.gas,COLORS.gas);
+  updateTrend('co',state.lastVals.co,COLORS.co);
+  updateTrend('co2',state.lastVals.co2,COLORS.co2);
+  updateTrend('no',state.lastVals.no,COLORS.no);
+  updateTrend('no2',state.lastVals.no2,COLORS.no2);
+  updateTrend('dust',state.lastVals.dust,COLORS.dust);
   updateTrend('temp',state.lastVals.temp,COLORS.temp);
   updateTrend('hum',state.lastVals.hum,COLORS.hum);
-  updateTrend('pm25',state.lastVals.pm25,COLORS.pm25);
 
   if(category!==state.lastCategory){
     const type=category==='Good'?'success':category==='Moderate'?'warning':'danger';
-    addAlert(`AQI: ${category} — Gas:${data.gas} Temp:${data.temp}°C Hum:${data.hum}% PM2.5:${data.pm25}`,type);
+    addAlert(`AQI: ${category} — CO:${data.co} CO₂:${data.co2} NO:${data.no} NO₂:${data.no2}`,type);
   }
   state.lastCategory=category;
-  if(data.pm25>55)addAlert(`⚠ High PM2.5: ${data.pm25} µg/m³`,'danger');
-  if(data.gas>450)addAlert(`⚠ High gas: ${data.gas} ppm`,'danger');
+  if(data.co>1400)addAlert(`⚠ High CO: ${data.co} ppm`,'danger');
+  if(data.co2>1400)addAlert(`⚠ High CO₂: ${data.co2} ppm`,'danger');
+  if(data.no>400)addAlert(`⚠ High NO: ${data.no} ppb`,'danger');
 
   const activePage=document.querySelector('.page.active');
   if(activePage){
     const id=activePage.id;
     if(id==='page-dashboard'){updateSessionStats();updateInsights(data,category);}
-    if(id==='page-analytics'){drawHistory();drawDonut();drawAverages();drawPM25();}
+    if(id==='page-analytics'){drawHistory();drawDonut();drawAverages();drawCO();}
     if(id==='page-insights'){updateAIInsights();drawGauge();}
   }
 }
@@ -164,6 +182,6 @@ async function init(){
   setInterval(tick,TICK_MS);
   setInterval(checkHealth,30000);
   const rb=$('refresh-btn');if(rb)rb.addEventListener('click',()=>tick());
-  let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{drawHistory();drawAverages();drawPM25();},150);});
+  let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{drawHistory();drawAverages();drawCO();},150);});
 }
 document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();

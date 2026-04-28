@@ -190,8 +190,11 @@ body {
 /* ── Sensor Grid ───────────────────────────────────────── */
 .sensor-grid {
   display:grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap:14px;
+}
+.sensor-grid-8 {
+  grid-template-columns: repeat(4, 1fr);
 }
 .sensor-card {
   background: var(--bg-card); border:1px solid var(--border);
@@ -434,11 +437,11 @@ canvas { display:block; width:100%; }
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width:1200px) {
-  .sensor-grid { grid-template-columns: repeat(3,1fr); }
-  .insight-stats-grid { grid-template-columns: repeat(2,1fr); }
+  .sensor-grid, .sensor-grid-8 { grid-template-columns: repeat(3,1fr); }
+  .insight-stats-grid { grid-template-columns: repeat(3,1fr); }
 }
 @media (max-width:1024px) {
-  .sensor-grid { grid-template-columns: repeat(2,1fr); }
+  .sensor-grid, .sensor-grid-8 { grid-template-columns: repeat(2,1fr); }
   .charts-grid { grid-template-columns:1fr; }
   .bottom-grid { grid-template-columns:1fr; }
   .insight-grid { grid-template-columns:1fr; }
@@ -455,7 +458,7 @@ canvas { display:block; width:100%; }
 @media (max-width:640px) {
   #app-header { padding:12px 16px; flex-wrap:wrap; gap:10px; }
   .header-right { flex-wrap:wrap; }
-  .sensor-grid { grid-template-columns:1fr 1fr; }
+  .sensor-grid, .sensor-grid-8 { grid-template-columns:1fr 1fr; }
   .aqi-banner { padding:18px 16px; }
   .chart-card { padding:16px; }
   .insight-stats-grid { grid-template-columns:1fr; }
@@ -474,4 +477,7 @@ canvas { display:block; width:100%; }
 .sensor-card:nth-child(3) { animation-delay:.12s; }
 .sensor-card:nth-child(4) { animation-delay:.16s; }
 .sensor-card:nth-child(5) { animation-delay:.20s; }
-.aqi-banner { animation-delay:.24s; }
+.sensor-card:nth-child(6) { animation-delay:.24s; }
+.sensor-card:nth-child(7) { animation-delay:.28s; }
+.sensor-card:nth-child(8) { animation-delay:.32s; }
+.aqi-banner { animation-delay:.36s; }

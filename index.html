@@ -122,25 +122,103 @@
             <h2 class="section-title">LIVE READINGS</h2>
             <span class="section-meta" id="header-timestamp">Last updated: --:--:--</span>
           </div>
-          <div class="sensor-grid" id="sensor-grid">
+          <div class="sensor-grid sensor-grid-8" id="sensor-grid">
 
-            <!-- Gas Index -->
-            <article class="sensor-card" id="card-gas">
+            <!-- CO -->
+            <article class="sensor-card" id="card-co">
               <div class="sensor-card-top">
                 <div class="sensor-icon gas">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 2s4 0 4 4c0 3-2 4-2 8h-4c0-4-2-5-2-8 0-4 4-4 4-4z"/>
-                    <path d="M6 14h4"/><line x1="8" y1="18" x2="8" y2="22"/>
+                    <path d="M6 14h4"/>
                   </svg>
                 </div>
-                <div class="sensor-trend" id="trend-gas">
-                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-gas" points="" fill="none" stroke="#10b981" stroke-width="1.5"/></svg>
+                <div class="sensor-trend" id="trend-co">
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-co" points="" fill="none" stroke="#64748b" stroke-width="1.5"/></svg>
                 </div>
               </div>
-              <span class="sensor-label">GAS INDEX</span>
+              <span class="sensor-label">CO</span>
               <div class="sensor-reading">
-                <span class="sensor-value" id="val-gas">--</span>
+                <span class="sensor-value" id="val-co">--</span>
                 <span class="sensor-unit">ppm</span>
+              </div>
+            </article>
+
+            <!-- CO2 -->
+            <article class="sensor-card" id="card-co2">
+              <div class="sensor-card-top">
+                <div class="sensor-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+                  </svg>
+                </div>
+                <div class="sensor-trend" id="trend-co2">
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-co2" points="" fill="none" stroke="#3b82f6" stroke-width="1.5"/></svg>
+                </div>
+              </div>
+              <span class="sensor-label">CO₂</span>
+              <div class="sensor-reading">
+                <span class="sensor-value" id="val-co2">--</span>
+                <span class="sensor-unit">ppm</span>
+              </div>
+            </article>
+
+            <!-- NO -->
+            <article class="sensor-card" id="card-no">
+              <div class="sensor-card-top">
+                <div class="sensor-icon" style="background:rgba(249,115,22,0.12);color:#f97316;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  </svg>
+                </div>
+                <div class="sensor-trend" id="trend-no">
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-no" points="" fill="none" stroke="#f97316" stroke-width="1.5"/></svg>
+                </div>
+              </div>
+              <span class="sensor-label">NO</span>
+              <div class="sensor-reading">
+                <span class="sensor-value" id="val-no">--</span>
+                <span class="sensor-unit">ppb</span>
+              </div>
+            </article>
+
+            <!-- NO2 -->
+            <article class="sensor-card" id="card-no2">
+              <div class="sensor-card-top">
+                <div class="sensor-icon" style="background:rgba(239,68,68,0.12);color:#ef4444;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                </div>
+                <div class="sensor-trend" id="trend-no2">
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-no2" points="" fill="none" stroke="#ef4444" stroke-width="1.5"/></svg>
+                </div>
+              </div>
+              <span class="sensor-label">NO₂</span>
+              <div class="sensor-reading">
+                <span class="sensor-value" id="val-no2">--</span>
+                <span class="sensor-unit">ppb</span>
+              </div>
+            </article>
+
+            <!-- Dust -->
+            <article class="sensor-card" id="card-dust">
+              <div class="sensor-card-top">
+                <div class="sensor-icon pm25">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="4 2"/>
+                    <circle cx="12" cy="12" r="10" opacity="0.4"/>
+                  </svg>
+                </div>
+                <div class="sensor-trend" id="trend-dust">
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-dust" points="" fill="none" stroke="#8b5cf6" stroke-width="1.5"/></svg>
+                </div>
+              </div>
+              <span class="sensor-label">DUST</span>
+              <div class="sensor-reading">
+                <span class="sensor-value" id="val-dust">--</span>
+                <span class="sensor-unit">mg/m³</span>
               </div>
             </article>
 
@@ -153,7 +231,7 @@
                   </svg>
                 </div>
                 <div class="sensor-trend" id="trend-temp">
-                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-temp" points="" fill="none" stroke="#f97316" stroke-width="1.5"/></svg>
+                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-temp" points="" fill="none" stroke="#f59e0b" stroke-width="1.5"/></svg>
                 </div>
               </div>
               <span class="sensor-label">TEMPERATURE</span>
@@ -179,26 +257,6 @@
               <div class="sensor-reading">
                 <span class="sensor-value" id="val-hum">--</span>
                 <span class="sensor-unit">%</span>
-              </div>
-            </article>
-
-            <!-- PM2.5 -->
-            <article class="sensor-card" id="card-pm25">
-              <div class="sensor-card-top">
-                <div class="sensor-icon pm25">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="4 2"/>
-                    <circle cx="12" cy="12" r="10" opacity="0.4"/>
-                  </svg>
-                </div>
-                <div class="sensor-trend" id="trend-pm25">
-                  <svg width="24" height="14" viewBox="0 0 24 14"><polyline id="trend-line-pm25" points="" fill="none" stroke="#8b5cf6" stroke-width="1.5"/></svg>
-                </div>
-              </div>
-              <span class="sensor-label">PM2.5</span>
-              <div class="sensor-reading">
-                <span class="sensor-value" id="val-pm25">--</span>
-                <span class="sensor-unit">µg/m³</span>
               </div>
             </article>
 
@@ -258,10 +316,13 @@
               <h3>Session Analysis</h3>
             </div>
             <div class="info-rows">
-              <div class="info-row"><span>Avg Gas Index</span><strong id="avg-gas">-- <small>ppm</small></strong></div>
-              <div class="info-row"><span>Avg Temperature</span><strong id="avg-temp">-- <small>°C</small></strong></div>
+              <div class="info-row"><span>Avg CO</span><strong id="avg-co">-- <small>ppm</small></strong></div>
+              <div class="info-row"><span>Avg CO₂</span><strong id="avg-co2">-- <small>ppm</small></strong></div>
+              <div class="info-row"><span>Avg NO</span><strong id="avg-no">-- <small>ppb</small></strong></div>
+              <div class="info-row"><span>Avg NO₂</span><strong id="avg-no2">-- <small>ppb</small></strong></div>
+              <div class="info-row"><span>Avg Dust</span><strong id="avg-dust">-- <small>mg/m³</small></strong></div>
+              <div class="info-row"><span>Avg Temp</span><strong id="avg-temp">-- <small>°C</small></strong></div>
               <div class="info-row"><span>Avg Humidity</span><strong id="avg-hum">-- <small>%</small></strong></div>
-              <div class="info-row"><span>Avg PM2.5</span><strong id="avg-pm25">-- <small>µg/m³</small></strong></div>
               <div class="info-row"><span>Data Points</span><strong id="data-points">0</strong></div>
             </div>
           </div>
@@ -306,10 +367,13 @@
             <h3>Sensor Trend (Last 15 readings)</h3>
             <canvas id="canvas-history" height="260"></canvas>
             <div class="chart-legend">
-              <span><span class="legend-dot" style="background:#3b82f6"></span> Gas Index</span>
-              <span><span class="legend-dot" style="background:#f97316"></span> Temperature</span>
+              <span><span class="legend-dot" style="background:#64748b"></span> CO</span>
+              <span><span class="legend-dot" style="background:#3b82f6"></span> CO₂</span>
+              <span><span class="legend-dot" style="background:#f97316"></span> NO</span>
+              <span><span class="legend-dot" style="background:#ef4444"></span> NO₂</span>
+              <span><span class="legend-dot" style="background:#8b5cf6"></span> Dust</span>
+              <span><span class="legend-dot" style="background:#f59e0b"></span> Temp</span>
               <span><span class="legend-dot" style="background:#06b6d4"></span> Humidity</span>
-              <span><span class="legend-dot" style="background:#8b5cf6"></span> PM2.5</span>
             </div>
           </div>
         </section>
@@ -331,12 +395,12 @@
         </section>
 
         <section class="section-block">
-          <div class="chart-card wide" id="chart-pm25-trend">
-            <h3>PM2.5 Concentration Trend</h3>
-            <canvas id="canvas-pm25" height="200"></canvas>
+          <div class="chart-card wide" id="chart-co-trend">
+            <h3>CO Concentration Trend</h3>
+            <canvas id="canvas-co" height="200"></canvas>
             <div class="chart-legend">
-              <span><span class="legend-dot" style="background:#8b5cf6"></span> PM2.5 (µg/m³)</span>
-              <span><span class="legend-dot" style="background:rgba(239,68,68,0.3)"></span> WHO Limit (25 µg/m³)</span>
+              <span><span class="legend-dot" style="background:#64748b"></span> CO (ppm)</span>
+              <span><span class="legend-dot" style="background:rgba(239,68,68,0.3)"></span> Warning (1000 ppm)</span>
             </div>
           </div>
         </section>
@@ -361,10 +425,13 @@
                 <tr>
                   <th>#</th>
                   <th>Time</th>
-                  <th>Gas Index</th>
-                  <th>Temp (°C)</th>
-                  <th>Humidity (%)</th>
-                  <th>PM2.5 (µg/m³)</th>
+                  <th>CO</th>
+                  <th>CO₂</th>
+                  <th>NO</th>
+                  <th>NO₂</th>
+                  <th>Dust</th>
+                  <th>Temp</th>
+                  <th>Hum</th>
                   <th>AQI</th>
                   <th>Status</th>
                 </tr>
@@ -384,48 +451,46 @@
           <!-- Stat Cards -->
           <div class="insight-stats-grid">
             <div class="insight-stat-card">
+              <div class="insight-stat-icon" style="background:rgba(100,116,139,0.12);color:#64748b;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2s4 0 4 4c0 3-2 4-2 8h-4c0-4-2-5-2-8 0-4 4-4 4-4z"/><path d="M6 14h4"/></svg>
+              </div>
+              <div><span class="insight-stat-label">Avg CO</span><strong class="insight-stat-value" id="insight-avg-co">--</strong></div>
+            </div>
+            <div class="insight-stat-card">
               <div class="insight-stat-icon" style="background:var(--blue-light);color:var(--blue);">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M8 2s4 0 4 4c0 3-2 4-2 8h-4c0-4-2-5-2-8 0-4 4-4 4-4z"/><path d="M6 14h4"/>
-                </svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
               </div>
-              <div>
-                <span class="insight-stat-label">Avg Gas Index</span>
-                <strong class="insight-stat-value" id="insight-avg-gas">--</strong>
-              </div>
+              <div><span class="insight-stat-label">Avg CO₂</span><strong class="insight-stat-value" id="insight-avg-co2">--</strong></div>
             </div>
             <div class="insight-stat-card">
               <div class="insight-stat-icon" style="background:var(--orange-light);color:var(--orange);">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 14.76V3.5a2.5 2.5 0 1 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
-                </svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               </div>
-              <div>
-                <span class="insight-stat-label">Avg Temperature</span>
-                <strong class="insight-stat-value" id="insight-avg-temp">--</strong>
-              </div>
+              <div><span class="insight-stat-label">Avg NO</span><strong class="insight-stat-value" id="insight-avg-no">--</strong></div>
             </div>
             <div class="insight-stat-card">
-              <div class="insight-stat-icon" style="background:var(--cyan-light);color:var(--cyan);">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
-                </svg>
+              <div class="insight-stat-icon" style="background:rgba(239,68,68,0.12);color:#ef4444;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
               </div>
-              <div>
-                <span class="insight-stat-label">Avg Humidity</span>
-                <strong class="insight-stat-value" id="insight-avg-hum">--</strong>
-              </div>
+              <div><span class="insight-stat-label">Avg NO₂</span><strong class="insight-stat-value" id="insight-avg-no2">--</strong></div>
             </div>
             <div class="insight-stat-card">
               <div class="insight-stat-icon" style="background:var(--purple-light);color:var(--purple);">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="4 2"/>
-                </svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="4 2"/></svg>
               </div>
-              <div>
-                <span class="insight-stat-label">Avg PM2.5</span>
-                <strong class="insight-stat-value" id="insight-avg-pm25">--</strong>
+              <div><span class="insight-stat-label">Avg Dust</span><strong class="insight-stat-value" id="insight-avg-dust">--</strong></div>
+            </div>
+            <div class="insight-stat-card">
+              <div class="insight-stat-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 1 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
               </div>
+              <div><span class="insight-stat-label">Avg Temp</span><strong class="insight-stat-value" id="insight-avg-temp">--</strong></div>
+            </div>
+            <div class="insight-stat-card">
+              <div class="insight-stat-icon" style="background:var(--cyan-light);color:var(--cyan);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+              </div>
+              <div><span class="insight-stat-label">Avg Humidity</span><strong class="insight-stat-value" id="insight-avg-hum">--</strong></div>
             </div>
           </div>
         </section>
